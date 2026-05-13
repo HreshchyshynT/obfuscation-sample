@@ -21,6 +21,7 @@ import com.example.obfuscation_sample_b.ui.theme.Obfuscation_sample_bTheme
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.coroutines.Continuation
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,7 +86,18 @@ class MainActivity : ComponentActivity() {
             entryPointClass.declaredMethods.forEach { method ->
                 Log.d(
                     "ReflectionBootstrap",
-                    "method: ${method.name}, args: ${method.parameterTypes}"
+                    "method: ${method.name}, args: ${method.parameterTypes.joinToString(",")}"
+                )
+            }
+            val method = entryPointClass.getDeclaredMethod("getItems", Continuation::class.java)
+            method.parameters.forEach { p ->
+                Log.d(
+                    "ReflectionBootstrap",
+                    "parameter: ${p.name}, type: ${p.type} is continuation: ${
+                        p.type.isAssignableFrom(
+                            Continuation::class.java
+                        )
+                    }"
                 )
             }
 
@@ -94,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 "EntryPointClass: $entryPointClass, instance: $classInstance"
             )
         } catch (e: Exception) {
-            Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e.cause)
+            Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)
         }
 
     }
