@@ -1,6 +1,5 @@
 package com.example.obfuscation_sample_b
 
-import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -14,9 +13,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.core.net.toUri
 import com.example.obfuscation_sample_b.ui.theme.Obfuscation_sample_bTheme
+import dalvik.system.DexClassLoader
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,12 +36,15 @@ class MainActivity : ComponentActivity() {
                                 .align(Alignment.Center),
                         ) {
                             Greeting(name = "App B (Bootstrap)")
+                            val cs = rememberCoroutineScope()
                             Button(onClick = {
-                                bootstrapReflection(
-                                    targetPackage = "com.example.obfuscation_sample_a",
-                                    className = "com.example.obfuscation_sample_a.db.DbDataManager",
-                                    methodName = "foo"
-                                )
+                                cs.launch {
+                                    bootstrapReflection(
+                                        targetPackage = "com.example.obfuscation_sample_a",
+                                        className = "com.example.obfuscation_sample_a.db.DbDataManager",
+                                        methodName = "foo"
+                                    )
+                                }
                             }) {
                                 Text("Trigger Reflection Bootstrap")
                             }
@@ -48,60 +55,63 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun bootstrapReflection(
+    private suspend fun bootstrapReflection(
         targetPackage: String,
         className: String,
         methodName: String,
     ) {
+        wakeUp(targetPackage)
+        delay(1000)
         try {
             Log.d("ReflectionBootstrap", "Starting bootstrap for $targetPackage")
 
-            // 1. createPackageContext: Use the flags CONTEXT_INCLUDE_CODE and CONTEXT_IGNORE_SECURITY.
-            val targetContext = createPackageContext(
+            val apkInfo = packageManager.getApplicationInfo(
                 targetPackage,
-                Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY
+                0
             )
 
-            // 2. ClassLoader Access: Fetch the ClassLoader from that context.
-            val classLoader = targetContext.classLoader
+            val apkSources = apkInfo.sourceDir
+            val dexLoader = DexClassLoader(
+                apkSources,
+                null,
+                null,
+                classLoader,
+            )
 
-            // 3. Class Loading: Load the class by its obfuscated string (e.g., "a.b.c").
-            val targetClass = classLoader.loadClass(className)
 
-            Log.d("ReflectionBootstrap", "Class $className loaded successfully")
+            val entryPointClass = dexLoader.loadClass(className)
 
-            // 4. Method Invocation: Use .getDeclaredMethod() and .invoke().
-            val method = try {
-                targetClass.getDeclaredMethod(methodName)
-            } catch (e: NoSuchMethodException) {
-                Log.e(
+            val classInstance = entryPointClass.getDeclaredConstructor().newInstance()
+            entryPointClass.declaredMethods.forEach { method ->
+                Log.d(
                     "ReflectionBootstrap",
-                    "Method $methodName not found in $className. Available methods:"
+                    "method: ${method.name}, args: ${method.parameterTypes}"
                 )
-                targetClass.declaredMethods.forEach {
-                    Log.d(
-                        "ReflectionBootstrap",
-                        "  - ${it.name}(${it.parameterTypes.joinToString { p -> p.simpleName }})"
-                    )
-                }
-                targetClass.declaredClasses.forEach {
-                    Log.d(
-                        "ReflectionBootstrap",
-                        "class  - ${it.name}"
-                    )
-                }
-
-                throw e
             }
 
-            method.isAccessible = true
-
-            // Invoke the method. If it's static, the first argument is null.
-            val result = method.invoke(null)
-
-            Log.d("ReflectionBootstrap", "Method $methodName invoked successfully. Result: $result")
+            Log.d(
+                "ReflectionBootstrap",
+                "EntryPointClass: $entryPointClass, instance: $classInstance"
+            )
         } catch (e: Exception) {
-            Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)
+            Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e.cause)
+        }
+
+    }
+
+    fun wakeUp(targetPackage: String) {
+        val uri = "content://$targetPackage.provider".toUri()
+        try {
+            contentResolver.query(
+                uri,
+                null,
+                null,
+                null,
+                null,
+            )?.close()
+            Log.d("WAKE_UP", "Success to query provider")
+        } catch (e: Exception) {
+            Log.e("WAKE_UP", "Failed to query provider", e)
         }
     }
 }

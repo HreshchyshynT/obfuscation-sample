@@ -4,9 +4,13 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import android.util.Log
 
 class DummyProvider : ContentProvider() {
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        Log.d("DummyProvider", "onCreate")
+        return true
+    }
 
     override fun query(
         uri: Uri,
@@ -14,7 +18,10 @@ class DummyProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
         sortOrder: String?
-    ): Cursor? = null
+    ): Cursor? {
+        Log.d("DummyProvider", "query")
+        return null
+    }
 
     override fun getType(uri: Uri): String? = null
 

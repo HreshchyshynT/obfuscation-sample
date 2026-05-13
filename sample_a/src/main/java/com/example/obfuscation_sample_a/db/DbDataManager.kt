@@ -2,31 +2,26 @@ package com.example.obfuscation_sample_a.db
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.flow
 
-class DbDataManager(private val itemDao: ItemDao) {
+class DbDataManager {
 
-    fun getItems(): Flow<List<Item>> {
-        // to keep method
-        foo()
-        return itemDao.getAllItems().onEach {
+    private val list = mutableListOf<Item>()
+
+    fun observeItems(): Flow<List<Item>> {
+        return flow {
             delay(1000)
+            emit(list.toList())
         }
     }
 
-    suspend fun getItem() {
-        itemDao.getAllItems().first()
+    suspend fun getItems(): List<Item> {
+        delay(1000)
+        return list.toList()
     }
 
     suspend fun addItem(value: String) {
         delay(1000)
-        itemDao.insert(Item(value = value))
-    }
-
-    companion object {
-        fun foo(): String {
-            return "bar"
-        }
+        list.add(Item(id = list.size, value = value))
     }
 }
