@@ -38,6 +38,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
+    implementation(project(":shared_module"))
 }
 
 tasks.register("generateSharedMapping") {
@@ -60,10 +61,10 @@ tasks.register("generateSharedMapping") {
 
             mappingFile.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
-                    // Check if the line is a class mapping for coroutines
+                    // Check if the line is a class mapping for coroutines or shared_module
                     if (!line.startsWith(" ")) {
                         insideTargetPackage = line.startsWith("kotlinx.coroutines") ||
-                                line.startsWith("kotlin.coroutines")
+                                line.startsWith("kotlin.coroutines") || line.startsWith("com.example.shared_module")
                     }
 
                     // If we are inside a target class, or it's a member of that class, keep it

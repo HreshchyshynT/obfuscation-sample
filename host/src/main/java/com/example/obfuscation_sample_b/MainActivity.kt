@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import com.example.obfuscation_sample_b.ui.theme.Obfuscation_sample_bTheme
+import com.example.shared_module.Shared
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
                     "ReflectionBootstrap",
                     "parameter: ${p.name}, type: ${p.type} is continuation: ${
                         p.type.isAssignableFrom(
-                            Continuation::class.java
+                            // to keep shared from shrinking
+                            Shared::class.java
                         )
                     }"
                 )

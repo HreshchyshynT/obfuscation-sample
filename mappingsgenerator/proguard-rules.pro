@@ -26,3 +26,4 @@
 -keep,allowobfuscation interface kotlinx.coroutines.** { *; }
 -keep,allowobfuscation class kotlin.coroutines.** { *; }
 -keep,allowobfuscation interface kotlin.coroutines.** { *; }
+-keep,allowobfuscation interface com.example.shared_module.** { *; }
