@@ -23,7 +23,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "obfuscation_sample_b"
-include(":app")
-include(":sample_a")
+include(":host")
+include(":plugin")
 include(":mappingsgenerator")
 include(":shared_module")

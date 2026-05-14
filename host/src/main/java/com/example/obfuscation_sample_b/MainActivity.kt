@@ -1,5 +1,6 @@
 package com.example.obfuscation_sample_b
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -61,22 +62,21 @@ class MainActivity : ComponentActivity() {
         className: String,
         methodName: String,
     ) {
-        wakeUp(targetPackage)
-        delay(1000)
         try {
             Log.d("ReflectionBootstrap", "Starting bootstrap for $targetPackage")
-
-            val apkInfo = packageManager.getApplicationInfo(
+            val otherAppContext = createPackageContext(
                 targetPackage,
-                0
+                CONTEXT_INCLUDE_CODE or CONTEXT_IGNORE_SECURITY,
             )
+
+            val apkInfo = otherAppContext.applicationInfo
 
             val apkSources = apkInfo.sourceDir
             val dexLoader = DexClassLoader(
                 apkSources,
                 null,
                 null,
-                classLoader,
+                otherAppContext.classLoader,
             )
 
 
@@ -86,10 +86,13 @@ class MainActivity : ComponentActivity() {
             entryPointClass.declaredMethods.forEach { method ->
                 Log.d(
                     "ReflectionBootstrap",
-                    "method: ${method.name}, args: ${method.parameterTypes.joinToString(",")}"
+                    "method: ${method.name}, args: ${method.parameterTypes.map { "${it.typeName}" }}"
                 )
             }
+            val clazz = Continuation::class.java
             val method = entryPointClass.getDeclaredMethod("getItems", Continuation::class.java)
+            method.isAccessible = true
+
             method.parameters.forEach { p ->
                 Log.d(
                     "ReflectionBootstrap",
@@ -103,7 +106,7 @@ class MainActivity : ComponentActivity() {
 
             Log.d(
                 "ReflectionBootstrap",
-                "EntryPointClass: $entryPointClass, instance: $classInstance"
+                "EntryPointClass: $entryPointClass"
             )
         } catch (e: Exception) {
             Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)

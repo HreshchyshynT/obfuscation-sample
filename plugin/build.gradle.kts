@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(project(":shared_module"))
     
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
