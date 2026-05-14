@@ -11,6 +11,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/mappingsgenerator" />
             <option value="$PROJECT_DIR$/sample_a" />
+            <option value="$PROJECT_DIR$/shared_module" />
           </set>
         </option>
       </GradleProjectSettings>
