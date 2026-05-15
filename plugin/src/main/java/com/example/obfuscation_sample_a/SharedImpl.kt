@@ -1,6 +1,5 @@
 package com.example.obfuscation_sample_a
 
-import androidx.annotation.Keep
 import com.example.shared_module.Shared
 import kotlinx.coroutines.delay
 

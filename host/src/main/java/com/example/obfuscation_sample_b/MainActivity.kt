@@ -21,6 +21,7 @@ import androidx.core.net.toUri
 import com.example.obfuscation_sample_b.ui.theme.Obfuscation_sample_bTheme
 import com.example.shared_module.Shared
 import dalvik.system.DexClassLoader
+import dalvik.system.PathClassLoader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.Continuation
@@ -80,25 +81,39 @@ class MainActivity : ComponentActivity() {
                 otherAppContext.classLoader,
             )
 
+//            val apkInfo = packageManager.getApplicationInfo(targetPackage, 0)
+//            val apkSources = apkInfo.sourceDir
+//            val dexLoader = DexClassLoader(
+//                apkSources,
+//                null,
+//                null,
+//                classLoader,
+//            )
 
+
+            // load Class<?>
             val entryPointClass = dexLoader.loadClass(className)
 
-            // покищо клас зберігається в двох апках
-            // але чомусь при касті ерорка
-            val classInstance = entryPointClass.getDeclaredConstructor().newInstance() as Shared
-            entryPointClass.declaredMethods.forEach { method ->
-                Log.d(
-                    "ReflectionBootstrap",
-                    "method: ${method.name}, args: ${method.parameterTypes.map { "${it.typeName}" }}"
-                )
-            }
+//            val classInstance = entryPointClass.getDeclaredConstructor().newInstance() as Shared
+//            entryPointClass.declaredMethods.forEach { method ->
+//                Log.d(
+//                    "ReflectionBootstrap",
+//                    "method: ${method.name}, args: ${method.parameterTypes.map { "${it.typeName}" }}"
+//                )
+//            }
 
             Log.d(
                 "ReflectionBootstrap",
-                "EntryPointClass: $entryPointClass, instance: $classInstance"
+                "superclass: ${entryPointClass.superclass}, genericInterfaces: ${entryPointClass.genericInterfaces.firstOrNull()?.typeName}"
+            )
+            val instance = entryPointClass.getDeclaredConstructor().newInstance()
+            Log.d(
+                "ReflectionBootstrap",
+                "instance: $instance is shared ${instance is Shared}"
             )
         } catch (e: Exception) {
             Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)
+            Log.e("ReflectionBootstrap", "Error during reflection bootstrap cause", e.cause)
         }
 
     }
