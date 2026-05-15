@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                                 cs.launch {
                                     bootstrapReflection(
                                         targetPackage = "com.example.obfuscation_sample_a",
-                                        className = "com.example.obfuscation_sample_a.db.DbDataManager",
+                                        className = "com.example.obfuscation_sample_a.SharedImpl",
                                         methodName = "foo"
                                     )
                                 }
@@ -83,32 +83,19 @@ class MainActivity : ComponentActivity() {
 
             val entryPointClass = dexLoader.loadClass(className)
 
-            val classInstance = entryPointClass.getDeclaredConstructor().newInstance()
+            // покищо клас зберігається в двох апках
+            // але чомусь при касті ерорка
+            val classInstance = entryPointClass.getDeclaredConstructor().newInstance() as Shared
             entryPointClass.declaredMethods.forEach { method ->
                 Log.d(
                     "ReflectionBootstrap",
                     "method: ${method.name}, args: ${method.parameterTypes.map { "${it.typeName}" }}"
                 )
             }
-            val clazz = Continuation::class.java
-            val method = entryPointClass.getDeclaredMethod("getItems", Continuation::class.java)
-            method.isAccessible = true
-
-            method.parameters.forEach { p ->
-                Log.d(
-                    "ReflectionBootstrap",
-                    "parameter: ${p.name}, type: ${p.type} is continuation: ${
-                        p.type.isAssignableFrom(
-                            // to keep shared from shrinking
-                            Shared::class.java
-                        )
-                    }"
-                )
-            }
 
             Log.d(
                 "ReflectionBootstrap",
-                "EntryPointClass: $entryPointClass"
+                "EntryPointClass: $entryPointClass, instance: $classInstance"
             )
         } catch (e: Exception) {
             Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)

@@ -1,6 +1,7 @@
 package com.example.obfuscation_sample_a
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -49,6 +50,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+var counter = 1
 
 @Composable
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
@@ -108,11 +111,16 @@ fun InsertTab(onInsert: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
+        val cs = rememberCoroutineScope()
         Button(
             onClick = {
                 if (text.isNotBlank()) {
                     onInsert(text)
                     text = ""
+                }
+                cs.launch {
+                    val result = SharedImpl().doSomething(counter++)
+                    Log.d("TEST", "result: $result")
                 }
             },
             modifier = Modifier.fillMaxWidth()

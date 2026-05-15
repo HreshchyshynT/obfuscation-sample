@@ -4,10 +4,9 @@ import androidx.annotation.Keep
 import com.example.shared_module.Shared
 import kotlinx.coroutines.delay
 
-@Keep
-class SharedImpl: Shared<Int, String> {
-    override suspend fun doSomething(params: Int): Result<String> {
+class SharedImpl : Shared {
+    override suspend fun doSomething(params: Int): String {
         delay(10_000)
-        return Result.success("$params")
+        return "$params"
     }
 }
