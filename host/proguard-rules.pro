@@ -21,3 +21,7 @@
 #-renamesourcefileattribute SourceFile
 
 -applymapping ../shared-metadata/coroutines.map
+
+-keep interface com.example.shared_module.Shared {
+    *;
+}

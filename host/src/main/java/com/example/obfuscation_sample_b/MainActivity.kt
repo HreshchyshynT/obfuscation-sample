@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import com.example.obfuscation_sample_b.ui.theme.Obfuscation_sample_bTheme
 import com.example.shared_module.Shared
 import dalvik.system.DexClassLoader
@@ -42,13 +43,11 @@ class MainActivity : ComponentActivity() {
                             Greeting(name = "App B (Bootstrap)")
                             val cs = rememberCoroutineScope()
                             Button(onClick = {
-                                cs.launch {
                                     bootstrapReflection(
                                         targetPackage = "com.example.obfuscation_sample_a",
                                         className = "com.example.obfuscation_sample_a.SharedImpl",
                                         methodName = "foo"
                                     )
-                                }
                             }) {
                                 Text("Trigger Reflection Bootstrap")
                             }
@@ -59,58 +58,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun bootstrapReflection(
+    private fun bootstrapReflection(
         targetPackage: String,
         className: String,
         methodName: String,
     ) {
         try {
-            Log.d("ReflectionBootstrap", "Starting bootstrap for $targetPackage")
-            val otherAppContext = createPackageContext(
-                targetPackage,
-                CONTEXT_INCLUDE_CODE or CONTEXT_IGNORE_SECURITY,
-            )
-
-            val apkInfo = otherAppContext.applicationInfo
-
+            Log.e("ReflectionBootstrap", "Starting bootstrap for $targetPackage")
+            val apkInfo = packageManager.getApplicationInfo(targetPackage, 0)
             val apkSources = apkInfo.sourceDir
             val dexLoader = DexClassLoader(
                 apkSources,
                 null,
                 null,
-                otherAppContext.classLoader,
+                classLoader,
             )
 
-//            val apkInfo = packageManager.getApplicationInfo(targetPackage, 0)
-//            val apkSources = apkInfo.sourceDir
-//            val dexLoader = DexClassLoader(
-//                apkSources,
-//                null,
-//                null,
-//                classLoader,
-//            )
 
-
-            // load Class<?>
             val entryPointClass = dexLoader.loadClass(className)
 
-//            val classInstance = entryPointClass.getDeclaredConstructor().newInstance() as Shared
-//            entryPointClass.declaredMethods.forEach { method ->
-//                Log.d(
-//                    "ReflectionBootstrap",
-//                    "method: ${method.name}, args: ${method.parameterTypes.map { "${it.typeName}" }}"
-//                )
-//            }
-
-            Log.d(
+            Log.e(
                 "ReflectionBootstrap",
                 "superclass: ${entryPointClass.superclass}, genericInterfaces: ${entryPointClass.genericInterfaces.firstOrNull()?.typeName}"
             )
             val instance = entryPointClass.getDeclaredConstructor().newInstance()
-            Log.d(
+            Log.e(
                 "ReflectionBootstrap",
                 "instance: $instance is shared ${instance is Shared}"
             )
+            instance as Shared
+
+            lifecycleScope.launch {
+                // ERROR here
+                val result = instance.doSomething(123)
+                Log.d("TEST", "Result: $result")
+
+            }
         } catch (e: Exception) {
             Log.e("ReflectionBootstrap", "Error during reflection bootstrap", e)
             Log.e("ReflectionBootstrap", "Error during reflection bootstrap cause", e.cause)
@@ -128,7 +111,7 @@ class MainActivity : ComponentActivity() {
                 null,
                 null,
             )?.close()
-            Log.d("WAKE_UP", "Success to query provider")
+            Log.e("WAKE_UP", "Success to query provider")
         } catch (e: Exception) {
             Log.e("WAKE_UP", "Failed to query provider", e)
         }
