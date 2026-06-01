@@ -12,5 +12,9 @@ gradlePlugin {
             id = "com.example.shared-mappings"
             implementationClass = "com.example.buildlogic.SharedMappingsPlugin"
         }
+        register("sharedMappingsProvider") {
+            id = "com.example.shared-mappings-provider"
+            implementationClass = "com.example.buildlogic.SharedMappingsProviderPlugin"
+        }
     }
 }

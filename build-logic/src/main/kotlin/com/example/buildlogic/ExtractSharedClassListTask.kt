@@ -28,73 +28,50 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
     @TaskAction
     fun extract() {
-        val classes = TreeSet<String>()
-        val additionalEntries = TreeSet<String>()
+        val entries = TreeSet<String>()
 
         inputFiles.files.forEach { file ->
             when {
-                file.name.endsWith(".aar") -> processAar(file, classes, additionalEntries)
-                file.name.endsWith(".jar") -> processJar(file, classes, additionalEntries)
+                file.name.endsWith(".aar") -> processAar(file, entries)
+                file.name.endsWith(".jar") -> processJar(file, entries)
             }
         }
 
         val output = outputFile.get().asFile
         output.parentFile.mkdirs()
         output.writeText(buildString {
-            appendLine("# Classes extracted from plugin dependencies")
-            classes.forEach { appendLine(it) }
-            if (additionalEntries.isNotEmpty()) {
-                appendLine()
-                appendLine("# Additional entries from shared-mappings-classes.txt")
-                additionalEntries.forEach { appendLine(it) }
-            }
+            entries.forEach { appendLine(it) }
         })
 
-        logger.lifecycle("Extracted ${classes.size} classes and ${additionalEntries.size} additional entries to ${output.path}")
+        logger.lifecycle("Extracted ${entries.size} shared mapping entries to ${output.path}")
     }
 
-    private fun processAar(aarFile: File, classes: TreeSet<String>, additional: TreeSet<String>) {
+    private fun processAar(aarFile: File, entries: TreeSet<String>) {
         ZipFile(aarFile).use { zip ->
             val classesJarEntry = zip.getEntry("classes.jar") ?: return
             zip.getInputStream(classesJarEntry).use { inputStream ->
-                scanJarStream(
-                    JarInputStream(BufferedInputStream(inputStream)),
-                    classes,
-                    additional,
-                )
+                scanJarForTxt(JarInputStream(BufferedInputStream(inputStream)), entries)
             }
         }
     }
 
-    private fun processJar(jarFile: File, classes: TreeSet<String>, additional: TreeSet<String>) {
+    private fun processJar(jarFile: File, entries: TreeSet<String>) {
         jarFile.inputStream().buffered().use { inputStream ->
-            scanJarStream(JarInputStream(inputStream), classes, additional)
+            scanJarForTxt(JarInputStream(inputStream), entries)
         }
     }
 
-    private fun scanJarStream(
-        jar: JarInputStream,
-        classes: TreeSet<String>,
-        additional: TreeSet<String>,
-    ) {
+    private fun scanJarForTxt(jar: JarInputStream, entries: TreeSet<String>) {
         jar.use { stream ->
             var entry: JarEntry? = stream.nextJarEntry
             while (entry != null) {
-                val name = entry.name
-                when {
-                    name == "META-INF/shared-mappings-classes.txt" -> {
-                        val content = stream.readBytes().toString(Charsets.UTF_8)
-                        content.lineSequence()
-                            .map { it.trim() }
-                            .filter { it.isNotBlank() && !it.startsWith("#") }
-                            .forEach { additional.add(it) }
-                    }
-                    name.endsWith(".class") && !name.startsWith("META-INF/") && name != "module-info.class" -> {
-                        val className = name
-                            .removeSuffix(".class")
-                            .replace('/', '.')
-                        classes.add(className)
-                    }
+                if (entry.name == "META-INF/shared-mappings-classes.txt") {
+                    val content = stream.readBytes().toString(Charsets.UTF_8)
+                    content.lineSequence()
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() && !it.startsWith("#") }
+                        .forEach { entries.add(it) }
+                    return
                 }
                 entry = stream.nextJarEntry
             }
