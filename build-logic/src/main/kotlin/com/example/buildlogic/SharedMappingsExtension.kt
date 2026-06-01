@@ -10,4 +10,8 @@ abstract class SharedMappingsExtension @Inject constructor(
     fun plugin(dependencyNotation: Any) {
         project.dependencies.add("sharedMappingsClasspath", dependencyNotation)
     }
+
+    fun sdk(dependencyNotation: Any) {
+        project.dependencies.add("sharedMappingsSdkClasspath", dependencyNotation)
+    }
 }

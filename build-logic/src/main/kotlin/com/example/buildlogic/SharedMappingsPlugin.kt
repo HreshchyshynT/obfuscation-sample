@@ -30,6 +30,18 @@ class SharedMappingsPlugin : Plugin<Project> {
             }
         }
 
+        val sdkConfiguration = project.configurations.create("sharedMappingsSdkClasspath") {
+            isCanBeConsumed = false
+            isCanBeResolved = true
+            isTransitive = false
+            attributes {
+                attribute(
+                    Usage.USAGE_ATTRIBUTE,
+                    project.objects.named(Usage::class.java, Usage.JAVA_RUNTIME),
+                )
+            }
+        }
+
         val classesFileCollection = configuration.incoming.artifactView {
             attributes {
                 attribute(
@@ -39,11 +51,21 @@ class SharedMappingsPlugin : Plugin<Project> {
             }
         }.files
 
+        val sdkFileCollection = sdkConfiguration.incoming.artifactView {
+            attributes {
+                attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    ArtifactTypeDefinition.JAR_TYPE,
+                )
+            }
+        }.files
+
         val extractTask = project.tasks.register(
             "extractSharedClassList",
             ExtractSharedClassListTask::class.java,
         ) {
             inputFiles.from(classesFileCollection)
+            sdkFiles.from(sdkFileCollection)
             outputFile.set(
                 project.layout.buildDirectory.file("shared-mappings/shared-class-list.txt")
             )

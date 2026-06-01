@@ -23,6 +23,10 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputFiles: ConfigurableFileCollection
 
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val sdkFiles: ConfigurableFileCollection
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
@@ -34,6 +38,12 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
             when {
                 file.name.endsWith(".aar") -> processAar(file, entries)
                 file.name.endsWith(".jar") -> processJar(file, entries)
+            }
+        }
+
+        sdkFiles.files.forEach { file ->
+            if (file.name.endsWith(".jar")) {
+                scanJarClasses(file, entries)
             }
         }
 
@@ -58,6 +68,27 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
     private fun processJar(jarFile: File, entries: TreeSet<String>) {
         jarFile.inputStream().buffered().use { inputStream ->
             scanJarForTxt(JarInputStream(inputStream), entries)
+        }
+    }
+
+    private fun scanJarClasses(jarFile: File, entries: TreeSet<String>) {
+        jarFile.inputStream().buffered().use { inputStream ->
+            JarInputStream(inputStream).use { stream ->
+                var entry: JarEntry? = stream.nextJarEntry
+                while (entry != null) {
+                    if (!entry.isDirectory
+                        && entry.name.endsWith(".class")
+                        && entry.name != "module-info.class"
+                        && !entry.name.startsWith("META-INF/")
+                    ) {
+                        val className = entry.name
+                            .removeSuffix(".class")
+                            .replace('/', '.')
+                        entries.add(className)
+                    }
+                    entry = stream.nextJarEntry
+                }
+            }
         }
     }
 
