@@ -1,24 +1,28 @@
-package com.example.buildlogic
-
+package com.example.buildlogicimport com.android.build.api.variant.ApplicationVariant
 import org.gradle.api.DefaultTask
+import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import java.io.BufferedInputStream
 import java.io.File
 import java.util.TreeMap
 import java.util.TreeSet
 import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
 import java.util.zip.ZipFile
+import kotlin.collections.component1
+import kotlin.collections.component2
 
 @CacheableTask
 abstract class ExtractSharedClassListTask : DefaultTask() {
@@ -31,17 +35,13 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val sdkFiles: ConfigurableFileCollection
 
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.NONE)
-    @get:Optional
-    abstract val compatibilityState: ConfigurableFileCollection
+
+    @get:OutputFile
+    abstract val sharedClassesList: RegularFileProperty
 
     @get:Input
     @get:Optional
     abstract val pluginFileMapping: MapProperty<String, String>
-
-    @get:OutputFile
-    abstract val outputFile: RegularFileProperty
 
     @get:OutputFile
     @get:Optional
@@ -49,22 +49,26 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
     @TaskAction
     fun extract() {
-        val entries = TreeSet<String>()
-
+        val entries = mutableSetOf<String>()
+        pluginFileMapping.get().forEach { path, pluginId ->
+            println("path: $path pluginId: $pluginId")
+        }
         inputFiles.files.forEach { file ->
-            when {
-                file.name.endsWith(".aar") -> processAar(file, entries)
-                file.name.endsWith(".jar") -> processJar(file, entries)
+            println("inputFiles: ${file.name}")
+            when(file.extension){
+                "aar" -> processAar(file, entries)
+                "jar" -> processJar(file, entries)
             }
         }
 
         sdkFiles.files.forEach { file ->
-            if (file.name.endsWith(".jar")) {
+            println("sdkFiles: ${file.name}")
+            if (file.extension == "jar") {
                 scanJarClasses(file, entries)
             }
         }
 
-        val output = outputFile.get().asFile
+        val output = sharedClassesList.get().asFile
         output.parentFile.mkdirs()
         output.writeText(buildString {
             entries.forEach { appendLine(it) }
@@ -75,6 +79,7 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         if (pluginFileMapping.isPresent && classPluginIndexFile.isPresent) {
             buildClassPluginIndex()
         }
+
     }
 
     private fun buildClassPluginIndex() {
@@ -82,7 +87,9 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         val invertedIndex = TreeMap<String, TreeSet<String>>()
 
         inputFiles.files.forEach { file ->
-            val pluginId = mapping[file.absolutePath] ?: return@forEach
+            val pluginId = mapping[file.absolutePath]
+            println("file: ${file.name} pluginId: $pluginId")
+            if (pluginId == null) return@forEach
             val pluginEntries = TreeSet<String>()
             when {
                 file.name.endsWith(".aar") -> processAar(file, pluginEntries)
@@ -103,51 +110,30 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
         logger.lifecycle(
             "Built class-plugin index with ${invertedIndex.size} entries " +
-                "across ${invertedIndex.values.flatten().toSet().size} plugins"
+                    "across ${invertedIndex.values.flatten().toSet().size} plugins"
         )
     }
 
-    private fun processAar(aarFile: File, entries: TreeSet<String>) {
+    private fun processAar(aarFile: File, entries: MutableSet<String>) {
         ZipFile(aarFile).use { zip ->
             val classesJarEntry = zip.getEntry("classes.jar") ?: return
-            zip.getInputStream(classesJarEntry).use { inputStream ->
-                scanJarForTxt(JarInputStream(BufferedInputStream(inputStream)), entries)
+            zip.getInputStream(classesJarEntry).buffered().use { inputStream ->
+                scanJarForTxt(JarInputStream(inputStream), entries)
             }
         }
     }
 
-    private fun processJar(jarFile: File, entries: TreeSet<String>) {
+    private fun processJar(jarFile: File, entries: MutableSet<String>) {
         jarFile.inputStream().buffered().use { inputStream ->
             scanJarForTxt(JarInputStream(inputStream), entries)
         }
     }
 
-    private fun scanJarClasses(jarFile: File, entries: TreeSet<String>) {
-        jarFile.inputStream().buffered().use { inputStream ->
-            JarInputStream(inputStream).use { stream ->
-                var entry: JarEntry? = stream.nextJarEntry
-                while (entry != null) {
-                    if (!entry.isDirectory
-                        && entry.name.endsWith(".class")
-                        && entry.name != "module-info.class"
-                        && !entry.name.startsWith("META-INF/")
-                    ) {
-                        val className = entry.name
-                            .removeSuffix(".class")
-                            .replace('/', '.')
-                        entries.add(className)
-                    }
-                    entry = stream.nextJarEntry
-                }
-            }
-        }
-    }
-
-    private fun scanJarForTxt(jar: JarInputStream, entries: TreeSet<String>) {
+    private fun scanJarForTxt(jar: JarInputStream, entries: MutableSet<String>) {
         jar.use { stream ->
             var entry: JarEntry? = stream.nextJarEntry
             while (entry != null) {
-                if (entry.name == "META-INF/shared-mappings-classes.txt") {
+                if (entry.name == GenerateSharedClassListTask.SHARED_MAPPINGS_CLASSES_FILE) {
                     val content = stream.readBytes().toString(Charsets.UTF_8)
                     content.lineSequence()
                         .map { it.trim() }
@@ -158,5 +144,60 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
                 entry = stream.nextJarEntry
             }
         }
+    }
+
+    private fun scanJarClasses(jarFile: File, entries: MutableSet<String>) {
+        jarFile.inputStream().buffered().use { inputStream ->
+            JarInputStream(inputStream).use { jarStream ->
+                var entry: JarEntry? = jarStream.nextJarEntry
+                while(entry != null) {
+                    if (!entry.isDirectory
+                            && entry.name.endsWith(".class")
+                            && entry.name != "module-info.class"
+                            && !entry.name.startsWith("META-INF/")) {
+                        val className = entry.name.removeSuffix(".class")
+                            .replace("/", ".")
+                        entries.add(className)
+                    }
+                    entry = jarStream.nextJarEntry
+                }
+            }
+
+        }
+    }
+
+    fun Project.configureTask(
+        variant: ApplicationVariant,
+        sdkConfig: Configuration,
+        pluginApisConfig: Configuration,
+    ) {
+
+        val pluginApisFilesProvider = provider {
+            pluginApisConfig.incoming.artifactView {
+                attributes {
+                    attribute(
+                        ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                        ArtifactTypeDefinition.JAR_TYPE,
+                    )
+                }
+            }.files
+        }
+
+        val sdkFilesProvider = provider {
+            sdkConfig.incoming.artifactView {
+                attributes {
+                    attribute(
+                        ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                        ArtifactTypeDefinition.JAR_TYPE,
+                    )
+                }
+            }.files
+        }
+
+        inputFiles.from(pluginApisFilesProvider)
+        sdkFiles.from(sdkFilesProvider)
+        sharedClassesList.set(
+            project.layout.buildDirectory.file("shared-mappings/${variant.name}/shared-class-list.txt")
+        )
     }
 }

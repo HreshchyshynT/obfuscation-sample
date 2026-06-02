@@ -1,6 +1,4 @@
-package com.example.buildlogic
-
-import org.gradle.api.DefaultTask
+package com.example.buildlogicimport org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
@@ -49,12 +47,16 @@ abstract class GenerateSharedClassListTask : DefaultTask() {
 
         additionalEntries.getOrElse(emptyList()).forEach { classes.add(it) }
 
-        val output = outputDir.get().asFile.resolve("META-INF/shared-mappings-classes.txt")
+        val output = outputDir.get().asFile.resolve(SHARED_MAPPINGS_CLASSES_FILE)
         output.parentFile.mkdirs()
         output.writeText(buildString {
             classes.forEach { appendLine(it) }
         })
 
         logger.lifecycle("Generated shared class list with ${classes.size} entries at ${output.path}")
+    }
+
+    companion object {
+        const val SHARED_MAPPINGS_CLASSES_FILE = "META-INF/shared-mappings-classes.txt"
     }
 }
