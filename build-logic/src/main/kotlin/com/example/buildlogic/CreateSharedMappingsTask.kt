@@ -5,6 +5,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.OutputDirectory
@@ -13,6 +14,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.io.File
 
+@CacheableTask
 abstract class CreateSharedMappingsTask : DefaultTask() {
 
     @get:InputFile
@@ -70,7 +72,8 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
                             currentPluginIds = if (prefixes.any { originalClass.startsWith(it) }) {
                                 allPluginIds
                             } else {
-                                classPluginIndex[originalClass] ?: emptySet()
+                                classPluginIndex[originalClass]
+                                    ?: findOwnerPluginIds(classPluginIndex, originalClass)
                             }
 
                             writer.write(line)
@@ -111,6 +114,18 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
         for (pluginId in pluginIds) {
             buffers[pluginId]?.appendLine(line)
         }
+    }
+
+    private fun findOwnerPluginIds(
+        classPluginIndex: Map<String, Set<String>>,
+        className: String,
+    ): Set<String> {
+        val dollarIdx = className.indexOf('$')
+        if (dollarIdx > 0) {
+            val outerClass = className.substring(0, dollarIdx)
+            classPluginIndex[outerClass]?.let { return it }
+        }
+        return emptySet()
     }
 
     private fun parseClassPluginIndex(file: File): Map<String, Set<String>> {

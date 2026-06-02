@@ -4,7 +4,7 @@ package com.example.buildlogic
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -15,7 +15,8 @@ abstract class CreateTempProguardRulesTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val abiChangedFlagFile: BoolFlagFile
 
-    @get:InputFiles
+    @get:InputFile
+    @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val sharedMappingsFile: RegularFileProperty
 

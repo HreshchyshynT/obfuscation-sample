@@ -6,8 +6,9 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -28,12 +29,12 @@ abstract class ValidateHostAbiTask : DefaultTask() {
     @get:Internal
     abstract val rootDirectory: DirectoryProperty
 
-    // 2. Task Outputs
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.NONE)
+    // 2. Lock file lives outside the build dir (in shared-metadata/), read at execution time
+    @get:Internal
     abstract val lockFile: RegularFileProperty
 
-    @get:InputFiles
+    @get:InputFile
+    @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val sharedMappingsFile: RegularFileProperty
 
@@ -67,19 +68,16 @@ abstract class ValidateHostAbiTask : DefaultTask() {
         }
     }
 
-    private fun calculateCurrentHash():String {
+    private fun calculateCurrentHash(): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        // TODO: here we have only :plugin:management:impl files
-        // probably its better to have files of plugin:
-        // Hash file paths and contents
-        sdkSourceFiles.files.sortedBy { it.absolutePath }
+        val rootDir = rootDirectory.get().asFile
+        sdkSourceFiles.files.sortedBy { it.relativeTo(rootDir).path }
             .filter { it.isFile }
             .forEach { file ->
-            digest.update(file.absolutePath.toByteArray(Charsets.UTF_8))
-            digest.update(file.readBytes())
-        }
+                digest.update(file.relativeTo(rootDir).path.toByteArray(Charsets.UTF_8))
+                digest.update(file.readBytes())
+            }
 
-        // Hash the coroutines version string configuration
         digest.update(dependenciesVersions.get().toByteArray(Charsets.UTF_8))
 
         return digest.digest().joinToString("") { "%02x".format(it) }

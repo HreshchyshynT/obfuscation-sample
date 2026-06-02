@@ -76,6 +76,7 @@ class HostAppPlugin : Plugin<Project> {
                             sharedModules.map { path -> project(path).fileTree("src") }
                         }
                         sdkSourceFiles.from(srcFiles)
+                        rootDirectory.set(rootProject.layout.projectDirectory)
 
                         sharedMappingsFile.set(commonMappingsFile)
 
@@ -100,7 +101,6 @@ class HostAppPlugin : Plugin<Project> {
                         "extractSharedClassList$variantCapName",
                         ExtractSharedClassListTask::class.java,
                     ) {
-                        dependsOn(validateAbi)
                         configureTask(variant, sdkConfiguration, pluginsApisConfiguration)
                     }
 

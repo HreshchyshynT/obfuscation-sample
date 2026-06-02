@@ -182,7 +182,7 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
             attributes {
                 attribute(
                     ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                    "android-classes-jar",
+                    ArtifactTypeDefinition.JAR_TYPE,
                 )
             }
         }.artifacts
@@ -205,7 +205,7 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         }
         classPluginIndexFile.set(
             project.layout.buildDirectory.file(
-                "shared-mappings/class-plugin-index.properties"
+                "shared-mappings/${variant.name}/class-plugin-index.properties"
             )
         )
         pluginFileMapping.set(pluginFileMappingProvider)
