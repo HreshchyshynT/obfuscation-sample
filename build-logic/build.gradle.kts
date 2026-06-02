@@ -8,13 +8,13 @@ dependencies {
 
 gradlePlugin {
     plugins {
-        register("sharedMappings") {
-            id = "com.example.shared-mappings"
-            implementationClass = "com.example.buildlogic.SharedMappingsPlugin"
+        register("host-app") {
+            id = "com.example.host-app"
+            implementationClass = "com.example.buildlogic.HostAppPlugin"
         }
-        register("sharedMappingsProvider") {
-            id = "com.example.shared-mappings-provider"
-            implementationClass = "com.example.buildlogic.SharedMappingsProviderPlugin"
+        register("plugin-api") {
+            id = "com.example.plugin-api"
+            implementationClass = "com.example.buildlogic.PluginApiPlugin"
         }
     }
 }

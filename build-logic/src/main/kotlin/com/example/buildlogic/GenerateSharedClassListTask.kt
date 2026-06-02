@@ -1,4 +1,6 @@
-package com.example.buildlogicimport org.gradle.api.DefaultTask
+package com.example.buildlogic
+
+import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty

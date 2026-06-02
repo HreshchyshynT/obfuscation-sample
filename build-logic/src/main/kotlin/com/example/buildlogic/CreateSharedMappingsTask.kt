@@ -1,4 +1,5 @@
-package com.example.buildlogicimport org.gradle.api.DefaultTask
+package com.example.buildlogic
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile

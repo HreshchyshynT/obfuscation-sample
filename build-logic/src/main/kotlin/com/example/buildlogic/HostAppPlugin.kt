@@ -1,4 +1,7 @@
-package com.example.buildlogicimport com.android.build.api.artifact.SingleArtifact
+package com.example.buildlogic
+
+
+import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.attributes.BuildTypeAttr
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.BasePlugin
@@ -10,11 +13,10 @@ import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Usage
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.configure
-import ua.org.istar.delta.android.runUnit
 import java.io.File
 
 class HostAppPlugin : Plugin<Project>{
-    override fun apply(target: Project) = target.runUnit {
+    override fun apply(target: Project): Unit = with(target){
         val extension = extensions.getOrCreateHostAbiExtension()
 
         // create configurations that let us inspect PluginApis and SDK files:
@@ -98,33 +100,6 @@ class HostAppPlugin : Plugin<Project>{
                         ExtractSharedClassListTask::class.java,
                     ) {
                         dependsOn(validateAbi)
-                        val artifacts = pluginsApisConfiguration.incoming.artifactView {
-                            attributes {
-                                attribute(
-                                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                                    "android-classes-jar",
-                                )
-                            }
-                        }.artifacts
-                        val pluginFileMappingProvider = artifacts.resolvedArtifacts.map {
-                            it.associate { artifact ->
-                                val pluginId = when (val id = artifact.id.componentIdentifier) {
-                                    is ProjectComponentIdentifier ->
-                                        id.projectPath.removePrefix(":").replace(":", "-")
-                                    is ModuleComponentIdentifier ->
-                                        "${id.group}--${id.module}"
-                                    else ->
-                                        id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
-                                }
-                                println("pluginId: $pluginId")
-                                artifact.file.absolutePath to pluginId
-
-                            }
-                        }
-                        classPluginIndexFile.set(project.layout.buildDirectory.file(
-                            "shared-mappings/class-plugin-index.properties"
-                        ))
-                        pluginFileMapping.set(pluginFileMappingProvider)
                         configureTask(variant, sdkConfiguration, pluginsApisConfiguration)
                     }
 

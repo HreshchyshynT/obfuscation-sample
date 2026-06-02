@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("com.example.plugin-api")
 }
 java {
     sourceCompatibility = JavaVersion.VERSION_11

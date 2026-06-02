@@ -22,7 +22,6 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/build-logic" />
             <option value="$PROJECT_DIR$/host" />
-            <option value="$PROJECT_DIR$/mappingsgenerator" />
             <option value="$PROJECT_DIR$/plugin" />
             <option value="$PROJECT_DIR$/shared_module" />
           </set>

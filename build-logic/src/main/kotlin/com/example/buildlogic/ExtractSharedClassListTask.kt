@@ -1,7 +1,12 @@
-package com.example.buildlogicimport com.android.build.api.variant.ApplicationVariant
+package com.example.buildlogic
+
+
+import com.android.build.api.variant.ApplicationVariant
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -199,5 +204,34 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         sharedClassesList.set(
             project.layout.buildDirectory.file("shared-mappings/${variant.name}/shared-class-list.txt")
         )
+
+        val artifacts = pluginApisConfig.incoming.artifactView {
+            attributes {
+                attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    "android-classes-jar",
+                )
+            }
+        }.artifacts
+        val pluginFileMappingProvider = artifacts.resolvedArtifacts.map {
+            it.associate { artifact ->
+                val pluginId = when (val id = artifact.id.componentIdentifier) {
+                    is ProjectComponentIdentifier ->
+                        id.projectPath.removePrefix(":").replace(":", "-")
+                    is ModuleComponentIdentifier ->
+                        "${id.group}--${id.module}"
+                    else ->
+                        id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
+                }
+                println("pluginId: $pluginId")
+                artifact.file.absolutePath to pluginId
+
+            }
+        }
+        classPluginIndexFile.set(project.layout.buildDirectory.file(
+            "shared-mappings/class-plugin-index.properties"
+        ))
+        pluginFileMapping.set(pluginFileMappingProvider)
+
     }
 }

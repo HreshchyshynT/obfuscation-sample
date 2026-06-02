@@ -1,4 +1,7 @@
-package com.example.buildlogicimport org.gradle.api.provider.ListProperty
+package com.example.buildlogic
+
+
+import org.gradle.api.provider.ListProperty
 
 abstract class PluginApiExtension {
 

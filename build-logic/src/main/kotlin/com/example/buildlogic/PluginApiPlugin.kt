@@ -1,4 +1,6 @@
-package com.example.buildlogicimport com.android.build.api.variant.LibraryAndroidComponentsExtension
+package com.example.buildlogic
+
+import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import com.android.build.gradle.LibraryPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project

@@ -1,4 +1,7 @@
-package com.example.buildlogicimport org.gradle.api.Project
+package com.example.buildlogic
+
+
+import org.gradle.api.Project
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.provider.ListProperty

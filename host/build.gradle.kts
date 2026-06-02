@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("com.example.shared-mappings")
+    id("com.example.host-app")
 }
 
 android {
@@ -62,6 +62,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-sharedMappings {
+hostAppConfig {
     plugin(project(":shared_module"))
 }
