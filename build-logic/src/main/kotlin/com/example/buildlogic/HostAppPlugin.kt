@@ -7,21 +7,19 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.BasePlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Usage
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.configure
 import java.io.File
 
-class HostAppPlugin : Plugin<Project>{
-    override fun apply(target: Project): Unit = with(target){
+class HostAppPlugin : Plugin<Project> {
+    override fun apply(target: Project): Unit = with(target) {
         val extension = extensions.getOrCreateHostAbiExtension()
 
         // create configurations that let us inspect PluginApis and SDK files:
 
-        val pluginsApisConfiguration = configurations.create(HostAppExtension.PLUGINS_APIS_CONFIGURATION) {
+        val pluginsApisConfiguration =
+            configurations.create(HostAppExtension.PLUGINS_APIS_CONFIGURATION) {
                 isCanBeConsumed = false
                 isCanBeResolved = true
                 attributes {
@@ -58,7 +56,6 @@ class HostAppPlugin : Plugin<Project>{
                     println("Task receives dependencies: ${extension.trackedDependencies.get()}")
 
 
-
                     val variantCapName = variant.name.capitalized()
                     val sharedDir = rootProject.file("shared-metadata/${variant.name}/")
                     if (!sharedDir.exists()) {
@@ -68,7 +65,7 @@ class HostAppPlugin : Plugin<Project>{
                     if (!abiLockFile.exists()) {
                         abiLockFile.createNewFile()
                     }
-                    val commonMappingsFile = File(sharedDir, COMMON_MAPPINGS_FILE_NAME)
+                    val commonMappingsFile = File(sharedDir, CreateSharedMappingsTask.COMBINED_MAPPINGS_FILE_NAME)
 
 
                     val validateAbi = project.tasks.register(
@@ -83,15 +80,19 @@ class HostAppPlugin : Plugin<Project>{
                         sharedMappingsFile.set(commonMappingsFile)
 
                         val versionProvider = project.provider {
-                            val configurationDeps = project.configurations.getByName("implementation").dependencies
+                            val configurationDeps =
+                                project.configurations.getByName("implementation").dependencies
                             extension.trackedDependencies.get().joinToString(";") { target ->
-                                val found = configurationDeps.find { "${it.group}:${it.name}".contains(target) }
+                                val found = configurationDeps.find {
+                                    "${it.group}:${it.name}".contains(target)
+                                }
                                 "$target:${found?.version ?: "unknown"}"
                             }
                         }
                         dependenciesVersions.set(versionProvider)
                         lockFile.set(abiLockFile)
-                        val abiChangedFile = layout.buildDirectory.file(getAbiChangedFlagFilePath(variant.name))
+                        val abiChangedFile =
+                            layout.buildDirectory.file(getAbiChangedFlagFilePath(variant.name))
                         abiChangedFlagFile.set(abiChangedFile)
                     }
 
@@ -108,16 +109,12 @@ class HostAppPlugin : Plugin<Project>{
                         "createSharedMappings$variantCapName",
                         CreateSharedMappingsTask::class.java,
                     ) {
-                        dependsOn(
-                            tasks.named { it == "l8DexDesugarLib$variantCapName" },
-                            validateAbi,
-                        )
-                        // Feed the fresh R8 mapping file from standard AGP output location
-                        val mappingsArtifact = variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
+                        val mappingsArtifact =
+                            variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
                         freshR8MappingFile.set(mappingsArtifact)
-                        // Target output inside the shared folder
-                        destinationStableMappingFile.set(commonMappingsFile)
-                        modulesMappingsFile.set(extractTask.flatMap { it.sharedClassesList })
+                        classPluginIndexFile.set(extractTask.flatMap { it.classPluginIndexFile })
+                        commonPrefixes.set(extension.commonDependencyPrefixes)
+                        outputDir.set(sharedDir)
 
                         abiChangedFlagFile.set(validateAbi.flatMap { it.abiChangedFlagFile })
 
@@ -130,7 +127,8 @@ class HostAppPlugin : Plugin<Project>{
                     ) {
                         abiChangedFlagFile.set(validateAbi.flatMap { it.abiChangedFlagFile })
                         sharedMappingsFile.set(commonMappingsFile)
-                        val proguardFile = layout.buildDirectory.file(getTempProguardPath(variantCapName))
+                        val proguardFile =
+                            layout.buildDirectory.file(getTempProguardPath(variantCapName))
                         generatedProGuardFile.set(proguardFile)
                     }
 
@@ -146,16 +144,15 @@ class HostAppPlugin : Plugin<Project>{
 
     }
 
-    private fun getTempProguardPath(variantName: String): String{
-        return  "tmp/${variantName}/proguard-rules.pro"
+    private fun getTempProguardPath(variantName: String): String {
+        return "tmp/${variantName}/proguard-rules.pro"
     }
 
     private fun getAbiChangedFlagFilePath(variantName: String): String {
-         return "tmp/${variantName}/abi/status.txt"
+        return "tmp/${variantName}/abi/status.txt"
     }
 
     companion object {
         private const val HOST_ABI_LOCK_FILE_NAME = "host-plugin-abi.lock"
-        private const val COMMON_MAPPINGS_FILE_NAME = "common-mappings.map"
     }
 }

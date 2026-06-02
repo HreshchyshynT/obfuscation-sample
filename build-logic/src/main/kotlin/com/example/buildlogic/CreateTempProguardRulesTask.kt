@@ -32,11 +32,11 @@ abstract class CreateTempProguardRulesTask : DefaultTask() {
             // Escape file windows paths safely if necessary
             val safePath = mappingFile.absolutePath.replace("\\", "/")
             outputFile.writeText("-applymapping \"$safePath\"\n")
-            logger.lifecycle("ABI Changed: Generated temporary ProGuard rule to apply shared mappings")
+            logger.lifecycle("Generated temporary ProGuard rule to apply shared mappings")
         } else {
             // Clear the file so R8 receives no mapping directives
             outputFile.writeText("")
-            logger.lifecycle("ABI Changed: Clearing temporary ProGuard rule to force fresh optimization")
+            logger.lifecycle("Clearing temporary ProGuard rule to force fresh optimization")
         }
     }
 }

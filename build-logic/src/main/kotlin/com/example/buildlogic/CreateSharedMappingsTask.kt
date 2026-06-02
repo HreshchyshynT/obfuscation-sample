@@ -1,15 +1,20 @@
 package com.example.buildlogic
+
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import java.io.File
 
 abstract class CreateSharedMappingsTask : DefaultTask() {
-    // to let gradle skip this task when flag remains the same
+
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val abiChangedFlagFile: BoolFlagFile
@@ -20,69 +25,105 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val modulesMappingsFile: RegularFileProperty
+    abstract val classPluginIndexFile: RegularFileProperty
 
-    @get:OutputFile
-    abstract val destinationStableMappingFile: RegularFileProperty
+    @get:Input
+    abstract val commonPrefixes: ListProperty<String>
 
-
-    companion object {
-        // TODO: read from abi extension
-        private val TARGET_PREFIXES = listOf(
-            "kotlin.coroutines.",
-            "kotlinx.coroutines.",
-            "kotlin.jvm.functions.",
-        )
-    }
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun createSharedMappings() {
         val inputFile = freshR8MappingFile.get().asFile
-        val outputFile = destinationStableMappingFile.get().asFile
-
         if (!inputFile.exists()) {
-            throw GradleException("Error: Input mapping file not found at ${inputFile.absolutePath}")
+            throw GradleException("Input mapping file not found at ${inputFile.absolutePath}")
         }
+
+        val prefixes = commonPrefixes.get()
+        val classPluginIndex = parseClassPluginIndex(classPluginIndexFile.get().asFile)
+        val allPluginIds = classPluginIndex.values.flatten().toSet()
+        val allSharedNames = prefixes + classPluginIndex.keys
+
+        val dir = outputDir.get().asFile.apply { mkdirs() }
+        val combinedFile = File(dir, COMBINED_MAPPINGS_FILE_NAME)
+        val combinedWriter = combinedFile.bufferedWriter()
+        val pluginBuffers = allPluginIds.associateWith { StringBuilder() }
 
         logger.lifecycle("Parsing host mapping: ${inputFile.absolutePath}")
 
         var insideTargetClass = false
+        var currentPluginIds: Set<String> = emptySet()
         var extractedClassesCount = 0
         var totalLinesWritten = 0
 
-        val packageNames = TARGET_PREFIXES + modulesMappingsFile.get().asFile.readLines().filter { it.isNotBlank() }
-
-        // Use Kotlin's idiomatic streaming wrappers to handle large mapping files efficiently without memory strain
-        outputFile.bufferedWriter().use { writer ->
+        combinedWriter.use { writer ->
             inputFile.useLines { lines ->
                 for (line in lines) {
-                    // Lines defining a class mapping look like: "original.class.Name -> obfuscated_name:"
                     if (" -> " in line && line.endsWith(":")) {
                         val originalClass = line.split(" -> ")[0].trim()
 
-                        // Check if this class matches any of our target prefixes
-                        if (packageNames.any { prefix -> originalClass.startsWith(prefix) }) {
+                        if (allSharedNames.any { originalClass.startsWith(it) }) {
                             insideTargetClass = true
                             extractedClassesCount++
+
+                            currentPluginIds = if (prefixes.any { originalClass.startsWith(it) }) {
+                                allPluginIds
+                            } else {
+                                classPluginIndex[originalClass] ?: emptySet()
+                            }
+
                             writer.write(line)
                             writer.newLine()
                             totalLinesWritten++
+                            appendToPluginBuffers(pluginBuffers, currentPluginIds, line)
                         } else {
                             insideTargetClass = false
+                            currentPluginIds = emptySet()
                         }
-                    }
-                    // If it's a member mapping line (fields/methods) or a metadata comment,
-                    // only write it if it belongs to a target class we are keeping
-                    else if (insideTargetClass) {
+                    } else if (insideTargetClass) {
                         writer.write(line)
                         writer.newLine()
                         totalLinesWritten++
+                        appendToPluginBuffers(pluginBuffers, currentPluginIds, line)
                     }
                 }
             }
         }
 
-        logger.lifecycle("Success! Extracted $extractedClassesCount matching classes ($totalLinesWritten total lines written).")
-        logger.lifecycle("Filtered mapping saved to: ${outputFile.absolutePath}")
+        pluginBuffers.forEach { (pluginId, buffer) ->
+            val pluginFile = File(dir, "$pluginId.map")
+            pluginFile.writeText(buffer.toString())
+            logger.lifecycle("  Per-plugin mapping: ${pluginFile.name} (${buffer.lines().size} lines)")
+        }
+
+        logger.lifecycle(
+            "Extracted $extractedClassesCount classes ($totalLinesWritten lines) " +
+                    "into combined + ${pluginBuffers.size} per-plugin files."
+        )
+    }
+
+    private fun appendToPluginBuffers(
+        buffers: Map<String, StringBuilder>,
+        pluginIds: Set<String>,
+        line: String,
+    ) {
+        for (pluginId in pluginIds) {
+            buffers[pluginId]?.appendLine(line)
+        }
+    }
+
+    private fun parseClassPluginIndex(file: File): Map<String, Set<String>> {
+        if (!file.exists()) return emptyMap()
+        return file.readLines()
+            .filter { it.isNotBlank() && "=" in it }
+            .associate { line ->
+                val (className, pluginIds) = line.split("=", limit = 2)
+                className.trim() to pluginIds.split(",").map { it.trim() }.toSet()
+            }
+    }
+
+    companion object {
+        const val COMBINED_MAPPINGS_FILE_NAME = "common-mappings.map"
     }
 }

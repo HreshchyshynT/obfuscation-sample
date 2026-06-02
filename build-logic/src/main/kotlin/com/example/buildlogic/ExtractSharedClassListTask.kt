@@ -13,9 +13,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -41,50 +39,15 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
     abstract val sdkFiles: ConfigurableFileCollection
 
 
-    @get:OutputFile
-    abstract val sharedClassesList: RegularFileProperty
-
     @get:Input
-    @get:Optional
     abstract val pluginFileMapping: MapProperty<String, String>
 
     @get:OutputFile
-    @get:Optional
     abstract val classPluginIndexFile: RegularFileProperty
 
     @TaskAction
     fun extract() {
-        val entries = mutableSetOf<String>()
-        pluginFileMapping.get().forEach { path, pluginId ->
-            println("path: $path pluginId: $pluginId")
-        }
-        inputFiles.files.forEach { file ->
-            println("inputFiles: ${file.name}")
-            when(file.extension){
-                "aar" -> processAar(file, entries)
-                "jar" -> processJar(file, entries)
-            }
-        }
-
-        sdkFiles.files.forEach { file ->
-            println("sdkFiles: ${file.name}")
-            if (file.extension == "jar") {
-                scanJarClasses(file, entries)
-            }
-        }
-
-        val output = sharedClassesList.get().asFile
-        output.parentFile.mkdirs()
-        output.writeText(buildString {
-            entries.forEach { appendLine(it) }
-        })
-
-        logger.lifecycle("Extracted ${entries.size} shared mapping entries to ${output.path}")
-
-        if (pluginFileMapping.isPresent && classPluginIndexFile.isPresent) {
-            buildClassPluginIndex()
-        }
-
+        buildClassPluginIndex()
     }
 
     private fun buildClassPluginIndex() {
@@ -102,6 +65,18 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
             }
             pluginEntries.forEach { entry ->
                 invertedIndex.getOrPut(entry) { TreeSet() }.add(pluginId)
+            }
+        }
+
+        val allPluginIds = invertedIndex.values.flatMapTo(TreeSet()) { it }
+
+        sdkFiles.files.forEach { file ->
+            if (file.extension == "jar") {
+                val sdkEntries = TreeSet<String>()
+                scanJarClasses(file, sdkEntries)
+                sdkEntries.forEach { entry ->
+                    invertedIndex.getOrPut(entry) { TreeSet() }.addAll(allPluginIds)
+                }
             }
         }
 
@@ -155,11 +130,12 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         jarFile.inputStream().buffered().use { inputStream ->
             JarInputStream(inputStream).use { jarStream ->
                 var entry: JarEntry? = jarStream.nextJarEntry
-                while(entry != null) {
+                while (entry != null) {
                     if (!entry.isDirectory
-                            && entry.name.endsWith(".class")
-                            && entry.name != "module-info.class"
-                            && !entry.name.startsWith("META-INF/")) {
+                        && entry.name.endsWith(".class")
+                        && entry.name != "module-info.class"
+                        && !entry.name.startsWith("META-INF/")
+                    ) {
                         val className = entry.name.removeSuffix(".class")
                             .replace("/", ".")
                         entries.add(className)
@@ -201,9 +177,6 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
         inputFiles.from(pluginApisFilesProvider)
         sdkFiles.from(sdkFilesProvider)
-        sharedClassesList.set(
-            project.layout.buildDirectory.file("shared-mappings/${variant.name}/shared-class-list.txt")
-        )
 
         val artifacts = pluginApisConfig.incoming.artifactView {
             attributes {
@@ -218,8 +191,10 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
                 val pluginId = when (val id = artifact.id.componentIdentifier) {
                     is ProjectComponentIdentifier ->
                         id.projectPath.removePrefix(":").replace(":", "-")
+
                     is ModuleComponentIdentifier ->
                         "${id.group}--${id.module}"
+
                     else ->
                         id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
                 }
@@ -228,9 +203,11 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
             }
         }
-        classPluginIndexFile.set(project.layout.buildDirectory.file(
-            "shared-mappings/class-plugin-index.properties"
-        ))
+        classPluginIndexFile.set(
+            project.layout.buildDirectory.file(
+                "shared-mappings/class-plugin-index.properties"
+            )
+        )
         pluginFileMapping.set(pluginFileMappingProvider)
 
     }

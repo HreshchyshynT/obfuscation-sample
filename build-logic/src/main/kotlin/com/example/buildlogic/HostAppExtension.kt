@@ -23,6 +23,16 @@ abstract class HostAppExtension @Inject constructor(
     val trackedDependencies: ListProperty<String> = objects.listProperty(String::class.java)
 
     /**
+     * Class/package prefixes for common dependencies whose mappings must appear
+     * in every per-plugin mapping file (e.g. coroutines, kotlin functions).
+     */
+    val commonDependencyPrefixes: ListProperty<String> = objects.listProperty(String::class.java)
+
+    fun commonDependency(prefix: String) {
+        commonDependencyPrefixes.add(prefix)
+    }
+
+    /**
      * add plugin api dependencies to the separate configuration to be able to extract information
      * required for shared mappings during build
      */
@@ -54,6 +64,11 @@ fun ExtensionContainer.getOrCreateHostAbiExtension(): HostAppExtension =
                 .apply {
                     sharedModules.convention(listOf())
                     trackedDependencies.convention(listOf())
+                    commonDependencyPrefixes.convention(listOf(
+                        "kotlin.coroutines.",
+                        "kotlinx.coroutines.",
+                        "kotlin.jvm.functions.",
+                    ))
                 }
 
 
