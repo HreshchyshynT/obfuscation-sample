@@ -3,14 +3,18 @@ package com.example.buildlogic
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.io.BufferedInputStream
 import java.io.File
+import java.util.TreeMap
 import java.util.TreeSet
 import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
@@ -27,8 +31,21 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val sdkFiles: ConfigurableFileCollection
 
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    @get:Optional
+    abstract val compatibilityState: ConfigurableFileCollection
+
+    @get:Input
+    @get:Optional
+    abstract val pluginFileMapping: MapProperty<String, String>
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
+
+    @get:OutputFile
+    @get:Optional
+    abstract val classPluginIndexFile: RegularFileProperty
 
     @TaskAction
     fun extract() {
@@ -54,6 +71,40 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         })
 
         logger.lifecycle("Extracted ${entries.size} shared mapping entries to ${output.path}")
+
+        if (pluginFileMapping.isPresent && classPluginIndexFile.isPresent) {
+            buildClassPluginIndex()
+        }
+    }
+
+    private fun buildClassPluginIndex() {
+        val mapping = pluginFileMapping.get()
+        val invertedIndex = TreeMap<String, TreeSet<String>>()
+
+        inputFiles.files.forEach { file ->
+            val pluginId = mapping[file.absolutePath] ?: return@forEach
+            val pluginEntries = TreeSet<String>()
+            when {
+                file.name.endsWith(".aar") -> processAar(file, pluginEntries)
+                file.name.endsWith(".jar") -> processJar(file, pluginEntries)
+            }
+            pluginEntries.forEach { entry ->
+                invertedIndex.getOrPut(entry) { TreeSet() }.add(pluginId)
+            }
+        }
+
+        val indexFile = classPluginIndexFile.get().asFile
+        indexFile.parentFile.mkdirs()
+        indexFile.writeText(buildString {
+            invertedIndex.forEach { (entry, pluginIds) ->
+                appendLine("$entry=${pluginIds.joinToString(",")}")
+            }
+        })
+
+        logger.lifecycle(
+            "Built class-plugin index with ${invertedIndex.size} entries " +
+                "across ${invertedIndex.values.flatten().toSet().size} plugins"
+        )
     }
 
     private fun processAar(aarFile: File, entries: TreeSet<String>) {
