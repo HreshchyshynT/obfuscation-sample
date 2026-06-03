@@ -19,7 +19,7 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val abiChangedFlagFile: BoolFlagFile
+    abstract val validationResultFile: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)

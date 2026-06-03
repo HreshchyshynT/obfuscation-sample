@@ -13,7 +13,7 @@ import org.gradle.api.tasks.TaskAction
 abstract class CreateTempProguardRulesTask : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val abiChangedFlagFile: BoolFlagFile
+    abstract val validationResultFile: RegularFileProperty
 
     @get:InputFile
     @get:Optional
@@ -25,17 +25,15 @@ abstract class CreateTempProguardRulesTask : DefaultTask() {
 
     @TaskAction
     fun execute() {
-        val abiChanged = abiChangedFlagFile.read()
+        val result = AbiValidationResult.fromFile(validationResultFile.get().asFile)
         val outputFile = generatedProGuardFile.get().asFile
         val mappingFile = sharedMappingsFile.get().asFile
 
-        if (!abiChanged && mappingFile.exists()) {
-            // Escape file windows paths safely if necessary
+        if (!result.hasAnyChange() && mappingFile.exists()) {
             val safePath = mappingFile.absolutePath.replace("\\", "/")
             outputFile.writeText("-applymapping \"$safePath\"\n")
             logger.lifecycle("Generated temporary ProGuard rule to apply shared mappings")
         } else {
-            // Clear the file so R8 receives no mapping directives
             outputFile.writeText("")
             logger.lifecycle("Clearing temporary ProGuard rule to force fresh optimization")
         }

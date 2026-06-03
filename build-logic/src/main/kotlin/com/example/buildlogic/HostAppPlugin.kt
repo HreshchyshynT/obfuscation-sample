@@ -7,16 +7,19 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.BasePlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Usage
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.configure
 import java.io.File
+import java.security.MessageDigest
 
 class HostAppPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         val extension = extensions.getOrCreateHostAbiExtension()
-
-        // create configurations that let us inspect PluginApis and SDK files:
 
         val pluginsApisConfiguration =
             configurations.create(HostAppExtension.PLUGINS_APIS_CONFIGURATION) {
@@ -53,48 +56,28 @@ class HostAppPlugin : Plugin<Project> {
         plugins.withType(BasePlugin::class.java) {
             extensions.configure<ApplicationAndroidComponentsExtension> {
                 onVariants(selector().withBuildType("release")) { variant ->
-                    println("Task receives dependencies: ${extension.trackedDependencies.get()}")
-
-
                     val variantCapName = variant.name.capitalized()
                     val sharedDir = rootProject.file("shared-metadata/${variant.name}/")
                     if (!sharedDir.exists()) {
                         sharedDir.mkdirs()
                     }
                     val abiLockFile = File(sharedDir, HOST_ABI_LOCK_FILE_NAME)
-                    if (!abiLockFile.exists()) {
-                        abiLockFile.createNewFile()
-                    }
-                    val commonMappingsFile = File(sharedDir, CreateSharedMappingsTask.COMBINED_MAPPINGS_FILE_NAME)
-
+                    val commonMappingsFile =
+                        File(sharedDir, CreateSharedMappingsTask.COMBINED_MAPPINGS_FILE_NAME)
 
                     val validateAbi = project.tasks.register(
                         "validatePluginAbi$variantCapName",
                         ValidateHostAbiTask::class.java,
                     ) {
-                        val srcFiles = extension.sharedModules.map { sharedModules ->
-                            sharedModules.map { path -> project(path).fileTree("src") }
-                        }
-                        sdkSourceFiles.from(srcFiles)
+                        sharedDepsVersions.set(buildSharedDepsVersions(extension))
+                        pluginVersions.set(buildArtifactVersions(pluginsApisConfiguration))
+                        sdkVersions.set(buildSdkVersions(extension, sdkConfiguration))
+                        sdkSourceFiles.from(buildSdkSourceFiles(extension))
                         rootDirectory.set(rootProject.layout.projectDirectory)
-
-                        sharedMappingsFile.set(commonMappingsFile)
-
-                        val versionProvider = project.provider {
-                            val configurationDeps =
-                                project.configurations.getByName("implementation").dependencies
-                            extension.trackedDependencies.get().joinToString(";") { target ->
-                                val found = configurationDeps.find {
-                                    "${it.group}:${it.name}".contains(target)
-                                }
-                                "$target:${found?.version ?: "unknown"}"
-                            }
-                        }
-                        dependenciesVersions.set(versionProvider)
                         lockFile.set(abiLockFile)
-                        val abiChangedFile =
-                            layout.buildDirectory.file(getAbiChangedFlagFilePath(variant.name))
-                        abiChangedFlagFile.set(abiChangedFile)
+                        resultFile.set(
+                            layout.buildDirectory.file("tmp/${variant.name}/abi/validation-result.json")
+                        )
                     }
 
                     val extractTask = project.tasks.register(
@@ -103,7 +86,6 @@ class HostAppPlugin : Plugin<Project> {
                     ) {
                         configureTask(variant, sdkConfiguration, pluginsApisConfiguration)
                     }
-
 
                     val createSharedMappings = tasks.register(
                         "createSharedMappings$variantCapName",
@@ -116,16 +98,21 @@ class HostAppPlugin : Plugin<Project> {
                         commonPrefixes.set(extension.commonDependencyPrefixes)
                         outputDir.set(sharedDir)
 
-                        abiChangedFlagFile.set(validateAbi.flatMap { it.abiChangedFlagFile })
+                        validationResultFile.set(validateAbi.flatMap { it.resultFile })
 
-                        onlyIf { abiChangedFlagFile.read() }
+                        onlyIf {
+                            val result = AbiValidationResult.fromFile(
+                                validationResultFile.get().asFile
+                            )
+                            result.hasAnyChange()
+                        }
                     }
 
                     val proguardRulesTask = tasks.register(
                         "createTempProguardRules$variantCapName",
                         CreateTempProguardRulesTask::class.java,
                     ) {
-                        abiChangedFlagFile.set(validateAbi.flatMap { it.abiChangedFlagFile })
+                        validationResultFile.set(validateAbi.flatMap { it.resultFile })
                         sharedMappingsFile.set(commonMappingsFile)
                         val proguardFile =
                             layout.buildDirectory.file(getTempProguardPath(variantCapName))
@@ -141,18 +128,94 @@ class HostAppPlugin : Plugin<Project> {
                 }
             }
         }
-
     }
+
+    private fun Project.buildSharedDepsVersions(
+        extension: HostAppExtension,
+    ) = provider {
+        val configurationDeps =
+            project.configurations.getByName("implementation").dependencies
+        extension.trackedDependencies.get().associateWith { target ->
+            val found = configurationDeps.find {
+                "${it.group}:${it.name}".contains(target)
+            }
+            (found?.version ?: "unknown")
+        }
+    }
+
+    private fun Project.buildArtifactVersions(
+        config: Configuration,
+    ) = provider {
+        config.incoming.artifactView {
+            attributes {
+                attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    ArtifactTypeDefinition.JAR_TYPE,
+                )
+            }
+        }.artifacts.resolvedArtifacts.get().associate { artifact ->
+            val id = artifact.id.componentIdentifier
+            val pluginId = derivePluginId(id)
+            val version = when (id) {
+                is ModuleComponentIdentifier -> id.version
+                else -> "sha256:${hashFileContent(artifact.file)}"
+            }
+            pluginId to version
+        }
+    }
+
+    private fun Project.buildSdkVersions(
+        extension: HostAppExtension,
+        sdkConfig: Configuration,
+    ) = provider {
+        val result = mutableMapOf<String, String>()
+        sdkConfig.incoming.artifactView {
+            attributes {
+                attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    ArtifactTypeDefinition.JAR_TYPE,
+                )
+            }
+        }.artifacts.resolvedArtifacts.get().forEach { artifact ->
+            val id = artifact.id.componentIdentifier
+            val sdkId = derivePluginId(id)
+            result[sdkId] = when (id) {
+                is ModuleComponentIdentifier -> id.version
+                else -> ValidateHostAbiTask.NEEDS_SOURCE_HASH
+            }
+        }
+        result.toMap()
+    }
+
+    private fun Project.buildSdkSourceFiles(
+        extension: HostAppExtension,
+    ) = extension.sharedModules.map { sharedModules ->
+        sharedModules.map { path -> project(path).fileTree("src") }
+    }
+
+    private fun derivePluginId(id: org.gradle.api.artifacts.component.ComponentIdentifier): String =
+        when (id) {
+            is ProjectComponentIdentifier ->
+                id.projectPath.removePrefix(":").replace(":", "-")
+
+            is ModuleComponentIdentifier ->
+                "${id.group}--${id.module}"
+
+            else ->
+                id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
+        }
 
     private fun getTempProguardPath(variantName: String): String {
         return "tmp/${variantName}/proguard-rules.pro"
     }
 
-    private fun getAbiChangedFlagFilePath(variantName: String): String {
-        return "tmp/${variantName}/abi/status.txt"
-    }
-
     companion object {
         private const val HOST_ABI_LOCK_FILE_NAME = "host-plugin-abi.lock"
+
+        fun hashFileContent(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            digest.update(file.readBytes())
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
     }
 }
