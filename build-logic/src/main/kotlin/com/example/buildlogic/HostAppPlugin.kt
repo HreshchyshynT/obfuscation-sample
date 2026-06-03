@@ -9,13 +9,10 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Usage
 import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.kotlin.dsl.configure
 import java.io.File
-import java.security.MessageDigest
 
 class HostAppPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
@@ -156,13 +153,12 @@ class HostAppPlugin : Plugin<Project> {
             }
         }.artifacts.resolvedArtifacts.map { artifacts ->
             artifacts.associate { artifact ->
-                val id = artifact.id.componentIdentifier
-                val pluginId = derivePluginId(id)
-                val version = when (id) {
-                    is ModuleComponentIdentifier -> id.version
-                    else -> "sha256:${hashFileContent(artifact.file)}"
-                }
-                pluginId to version
+            val id = artifact.id.componentIdentifier
+            val version = when (id) {
+                is ModuleComponentIdentifier -> id.version
+                else -> "sha256:${hashFileContent(artifact.file)}"
+            }
+            derivePluginId(id) to version
             }
         }
 
@@ -170,23 +166,14 @@ class HostAppPlugin : Plugin<Project> {
         extension: HostAppExtension,
         sdkConfig: Configuration,
     ) = provider {
-        val result = mutableMapOf<String, String>()
-        sdkConfig.incoming.artifactView {
-            attributes {
-                attribute(
-                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                    ArtifactTypeDefinition.JAR_TYPE,
-                )
-            }
-        }.artifacts.resolvedArtifacts.get().forEach { artifact ->
+        sdkConfig.incoming.jarArtifactView().artifacts.resolvedArtifacts.get().associate { artifact ->
             val id = artifact.id.componentIdentifier
-            val sdkId = derivePluginId(id)
-            result[sdkId] = when (id) {
+            val version = when (id) {
                 is ModuleComponentIdentifier -> id.version
                 else -> ValidateHostAbiTask.NEEDS_SOURCE_HASH
             }
+            derivePluginId(id) to version
         }
-        result.toMap()
     }
 
     private fun Project.buildSdkSourceFiles(
@@ -195,29 +182,11 @@ class HostAppPlugin : Plugin<Project> {
         sharedModules.map { path -> project(path).fileTree("src") }
     }
 
-    private fun derivePluginId(id: org.gradle.api.artifacts.component.ComponentIdentifier): String =
-        when (id) {
-            is ProjectComponentIdentifier ->
-                id.projectPath.removePrefix(":").replace(":", "-")
-
-            is ModuleComponentIdentifier ->
-                "${id.group}--${id.module}"
-
-            else ->
-                id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
-        }
-
     private fun getTempProguardPath(variantName: String): String {
         return "tmp/${variantName}/proguard-rules.pro"
     }
 
     companion object {
         private const val HOST_ABI_LOCK_FILE_NAME = "host-plugin-abi.lock"
-
-        fun hashFileContent(file: File): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            digest.update(file.readBytes())
-            return digest.digest().joinToString("") { "%02x".format(it) }
-        }
     }
 }

@@ -27,9 +27,9 @@ abstract class CreateTempProguardRulesTask : DefaultTask() {
     fun execute() {
         val result = AbiValidationResult.fromFile(validationResultFile.get().asFile)
         val outputFile = generatedProGuardFile.get().asFile
-        val mappingFile = sharedMappingsFile.get().asFile
+        val mappingFile = sharedMappingsFile.orNull?.asFile
 
-        if (!result.hasAnyChange() && mappingFile.exists()) {
+        if (!result.hasAnyChange() && mappingFile != null && mappingFile.exists()) {
             val safePath = mappingFile.absolutePath.replace("\\", "/")
             outputFile.writeText("-applymapping \"$safePath\"\n")
             logger.lifecycle("Generated temporary ProGuard rule to apply shared mappings")

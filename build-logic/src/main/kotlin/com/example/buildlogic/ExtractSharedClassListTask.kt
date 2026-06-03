@@ -5,9 +5,6 @@ import com.android.build.api.variant.ApplicationVariant
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier
-import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
@@ -52,7 +49,6 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
         inputFiles.files.forEach { file ->
             val pluginId = mapping[file.absolutePath]
-            println("file: ${file.name} pluginId: $pluginId")
             if (pluginId == null) return@forEach
             val pluginEntries = TreeSet<String>()
             when(file.extension) {
@@ -148,55 +144,15 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
         sdkConfig: Configuration,
         pluginApisConfig: Configuration,
     ) {
+        val pluginApisView = pluginApisConfig.incoming.jarArtifactView()
+        val sdkView = sdkConfig.incoming.jarArtifactView()
 
-        val pluginApisFilesProvider = provider {
-            pluginApisConfig.incoming.artifactView {
-                attributes {
-                    attribute(
-                        ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                        ArtifactTypeDefinition.JAR_TYPE,
-                    )
-                }
-            }.files
-        }
+        inputFiles.from(provider { pluginApisView.files })
+        sdkFiles.from(provider { sdkView.files })
 
-        val sdkFilesProvider = provider {
-            sdkConfig.incoming.artifactView {
-                attributes {
-                    attribute(
-                        ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                        ArtifactTypeDefinition.JAR_TYPE,
-                    )
-                }
-            }.files
-        }
-
-        inputFiles.from(pluginApisFilesProvider)
-        sdkFiles.from(sdkFilesProvider)
-
-        val artifacts = pluginApisConfig.incoming.artifactView {
-            attributes {
-                attribute(
-                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                    ArtifactTypeDefinition.JAR_TYPE,
-                )
-            }
-        }.artifacts
-        val pluginFileMappingProvider = artifacts.resolvedArtifacts.map {
+        val pluginFileMappingProvider = pluginApisView.artifacts.resolvedArtifacts.map {
             it.associate { artifact ->
-                val pluginId = when (val id = artifact.id.componentIdentifier) {
-                    is ProjectComponentIdentifier ->
-                        id.projectPath.removePrefix(":").replace(":", "-")
-
-                    is ModuleComponentIdentifier ->
-                        "${id.group}--${id.module}"
-
-                    else ->
-                        id.displayName.replace(Regex("[^a-zA-Z0-9._-]"), "-")
-                }
-                println("pluginId: $pluginId")
-                artifact.file.absolutePath to pluginId
-
+                artifact.file.absolutePath to derivePluginId(artifact.id.componentIdentifier)
             }
         }
         classPluginIndexFile.set(
@@ -205,6 +161,5 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
             )
         )
         pluginFileMapping.set(pluginFileMappingProvider)
-
     }
 }

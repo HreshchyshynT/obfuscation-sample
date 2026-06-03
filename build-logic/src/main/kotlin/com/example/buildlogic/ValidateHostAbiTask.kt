@@ -5,6 +5,7 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
@@ -13,8 +14,8 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.io.File
-import java.security.MessageDigest
 
+@CacheableTask
 abstract class ValidateHostAbiTask : DefaultTask() {
 
     @get:Input
@@ -105,7 +106,7 @@ abstract class ValidateHostAbiTask : DefaultTask() {
     private fun buildEffectiveSdkVersions(): Map<String, String> {
         val declared = sdkVersions.get().toMutableMap()
         val rootDir = rootDirectory.get().asFile
-        val sourceHash = hashFiles(sdkSourceFiles, rootDir)
+        val sourceHash = hashFileCollection(sdkSourceFiles.files, rootDir)
         for ((sdkId, value) in declared) {
             if (value == NEEDS_SOURCE_HASH) {
                 declared[sdkId] = "sha256:$sourceHash"
@@ -130,17 +131,6 @@ abstract class ValidateHostAbiTask : DefaultTask() {
 
     companion object {
         const val NEEDS_SOURCE_HASH = "__needs_source_hash__"
-
-        private fun hashFiles(files: ConfigurableFileCollection, rootDir: File): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            files.files.sortedBy { it.relativeTo(rootDir).path }
-                .filter { it.isFile }
-                .forEach { file ->
-                    digest.update(file.relativeTo(rootDir).path.toByteArray(Charsets.UTF_8))
-                    digest.update(file.readBytes())
-                }
-            return digest.digest().joinToString("") { "%02x".format(it) }
-        }
     }
 }
 
