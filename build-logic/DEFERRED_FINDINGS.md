@@ -12,12 +12,6 @@
 
 Both methods call `additionalEntries.add(...)` with no semantic distinction. A package prefix and a fully-qualified class name are treated identically downstream. Either remove one or add validation (e.g., ensure packages end with `.`).
 
-## 2.6 Lock File Written Before Downstream Tasks Complete (Medium)
-
-**File**: `ValidateHostAbiTask.kt` — `validate()` method
-
-The lock file is written with current versions during the validate action, before downstream tasks (mappings generation) have actually executed. If mapping generation fails, the lock file already records the new versions as "done," and a re-run would see no changes — silently skipping the failed regeneration. The lock file should ideally be updated only after successful downstream work.
-
 ## 3.2 `buildSharedDepsVersions` Scans Wrong Configuration (Low/Correctness)
 
 **File**: `HostAppPlugin.kt` — `buildSharedDepsVersions()`

@@ -40,6 +40,9 @@ abstract class ValidateHostAbiTask : DefaultTask() {
     @get:OutputFile
     abstract val resultFile: RegularFileProperty
 
+    @get:OutputFile
+    abstract val pendingLockFile: RegularFileProperty
+
     @TaskAction
     fun validate() {
         val lock = readLockFile(lockFile.get().asFile)
@@ -84,7 +87,7 @@ abstract class ValidateHostAbiTask : DefaultTask() {
         )
 
         writeLockFile(
-            lockFile.get().asFile,
+            pendingLockFile.get().asFile,
             LockFileData(
                 sharedDeps = currentSharedDeps,
                 sdks = currentSdkVersions,

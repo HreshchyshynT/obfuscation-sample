@@ -40,7 +40,8 @@ fun hashFileContent(file: File): String {
         DigestInputStream(input, digest).use { dis ->
             val buffer = ByteArray(8192)
             @Suppress("ControlFlowWithEmptyBody")
-            while (dis.read(buffer) != -1) {}
+            while (dis.read(buffer) != -1) {
+            }
         }
     }
     return digest.toHexString()
@@ -56,7 +57,8 @@ fun hashFileCollection(files: Iterable<File>, rootDir: File): String {
                 DigestInputStream(input, digest).use { dis ->
                     val buffer = ByteArray(8192)
                     @Suppress("ControlFlowWithEmptyBody")
-                    while (dis.read(buffer) != -1) {}
+                    while (dis.read(buffer) != -1) {
+                    }
                 }
             }
         }

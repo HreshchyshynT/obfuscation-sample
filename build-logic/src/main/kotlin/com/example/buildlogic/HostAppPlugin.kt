@@ -76,6 +76,9 @@ class HostAppPlugin : Plugin<Project> {
                         resultFile.set(
                             layout.buildDirectory.file("tmp/${variant.name}/abi/validation-result.json")
                         )
+                        pendingLockFile.set(
+                            layout.buildDirectory.file("tmp/${variant.name}/abi/pending-lock.json")
+                        )
                     }
 
                     val extractTask = project.tasks.register(
@@ -106,6 +109,14 @@ class HostAppPlugin : Plugin<Project> {
                         }
                     }
 
+                    val updateAbiLock = tasks.register(
+                        "updateAbiLock$variantCapName",
+                        UpdateAbiLockTask::class.java,
+                    ) {
+                        pendingLockFile.set(validateAbi.flatMap { it.pendingLockFile })
+                        lockFile.set(abiLockFile)
+                    }
+
                     val proguardRulesTask = tasks.register(
                         "createTempProguardRules$variantCapName",
                         CreateTempProguardRulesTask::class.java,
@@ -122,6 +133,10 @@ class HostAppPlugin : Plugin<Project> {
                     tasks.named { it == "minify${variantCapName}WithR8" }.configureEach {
                         dependsOn(proguardRulesTask)
                         finalizedBy(createSharedMappings)
+                    }
+
+                    createSharedMappings.configure {
+                        finalizedBy(updateAbiLock)
                     }
                 }
             }
@@ -143,30 +158,22 @@ class HostAppPlugin : Plugin<Project> {
 
     private fun Project.buildArtifactVersions(
         config: Configuration,
-    ) =
-        config.incoming.artifactView {
-            attributes {
-                attribute(
-                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
-                    ArtifactTypeDefinition.JAR_TYPE,
-                )
-            }
-        }.artifacts.resolvedArtifacts.map { artifacts ->
-            artifacts.associate { artifact ->
+    ) = config.incoming.jarArtifactView().artifacts.resolvedArtifacts.map { artifactResults ->
+        artifactResults.associate { artifact ->
             val id = artifact.id.componentIdentifier
             val version = when (id) {
                 is ModuleComponentIdentifier -> id.version
                 else -> "sha256:${hashFileContent(artifact.file)}"
             }
             derivePluginId(id) to version
-            }
         }
+    }
 
     private fun Project.buildSdkVersions(
         extension: HostAppExtension,
         sdkConfig: Configuration,
-    ) = provider {
-        sdkConfig.incoming.jarArtifactView().artifacts.resolvedArtifacts.get().associate { artifact ->
+    ) = sdkConfig.incoming.jarArtifactView().artifacts.resolvedArtifacts.map { artifactResults ->
+        artifactResults.associate { artifact ->
             val id = artifact.id.componentIdentifier
             val version = when (id) {
                 is ModuleComponentIdentifier -> id.version
