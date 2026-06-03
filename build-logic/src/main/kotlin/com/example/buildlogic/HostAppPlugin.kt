@@ -51,6 +51,23 @@ class HostAppPlugin : Plugin<Project> {
             }
         }
 
+        val trackedDepsConfiguration =
+            configurations.create(HostAppExtension.TRACKED_DEPS_CONFIGURATION) {
+                isCanBeConsumed = false
+                isCanBeResolved = true
+                isTransitive = false
+                attributes {
+                    attribute(
+                        BuildTypeAttr.ATTRIBUTE,
+                        project.objects.named(BuildTypeAttr::class.java, "release"),
+                    )
+                    attribute(
+                        Usage.USAGE_ATTRIBUTE,
+                        project.objects.named(Usage::class.java, Usage.JAVA_RUNTIME),
+                    )
+                }
+            }
+
         plugins.withType(BasePlugin::class.java) {
             extensions.configure<ApplicationAndroidComponentsExtension> {
                 onVariants(selector().withBuildType("release")) { variant ->
@@ -65,11 +82,9 @@ class HostAppPlugin : Plugin<Project> {
                         "validatePluginAbi$variantCapName",
                         ValidateHostAbiTask::class.java,
                     ) {
-                        sharedDepsVersions.set(buildSharedDepsVersions(extension))
+                        sharedDepsVersions.set(buildArtifactVersions(trackedDepsConfiguration))
                         pluginVersions.set(buildArtifactVersions(pluginsApisConfiguration))
-                        sdkVersions.set(buildSdkVersions(extension, sdkConfiguration))
-                        sdkSourceFiles.from(buildSdkSourceFiles(extension))
-                        rootDirectory.set(rootProject.layout.projectDirectory)
+                        sdkVersions.set(buildArtifactVersions(sdkConfiguration))
                         lockFile.set(abiLockFile)
                         resultFile.set(
                             layout.buildDirectory.file("tmp/${variant.name}/abi/validation-result.json")
@@ -141,19 +156,6 @@ class HostAppPlugin : Plugin<Project> {
         }
     }
 
-    private fun Project.buildSharedDepsVersions(
-        extension: HostAppExtension,
-    ) = provider {
-        val configurationDeps =
-            project.configurations.getByName("implementation").dependencies
-        extension.trackedDependencies.get().associateWith { target ->
-            val found = configurationDeps.find {
-                "${it.group}:${it.name}".contains(target)
-            }
-            (found?.version ?: "unknown")
-        }
-    }
-
     private fun Project.buildArtifactVersions(
         config: Configuration,
     ) = config.incoming.jarArtifactView().artifacts.resolvedArtifacts.map { artifactResults ->
@@ -165,26 +167,6 @@ class HostAppPlugin : Plugin<Project> {
             }
             derivePluginId(id) to version
         }
-    }
-
-    private fun Project.buildSdkVersions(
-        extension: HostAppExtension,
-        sdkConfig: Configuration,
-    ) = sdkConfig.incoming.jarArtifactView().artifacts.resolvedArtifacts.map { artifactResults ->
-        artifactResults.associate { artifact ->
-            val id = artifact.id.componentIdentifier
-            val version = when (id) {
-                is ModuleComponentIdentifier -> id.version
-                else -> ValidateHostAbiTask.NEEDS_SOURCE_HASH
-            }
-            derivePluginId(id) to version
-        }
-    }
-
-    private fun Project.buildSdkSourceFiles(
-        extension: HostAppExtension,
-    ) = extension.sharedModules.map { sharedModules ->
-        sharedModules.map { path -> project(path).fileTree("src") }
     }
 
     private fun getTempProguardPath(variantName: String): String {

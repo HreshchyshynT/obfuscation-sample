@@ -1,17 +1,12 @@
 package com.example.buildlogic
 
 import org.gradle.api.DefaultTask
-import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.io.File
 
@@ -27,13 +22,6 @@ abstract class ValidateHostAbiTask : DefaultTask() {
     @get:Input
     abstract val sdkVersions: MapProperty<String, String>
 
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val sdkSourceFiles: ConfigurableFileCollection
-
-    @get:Internal
-    abstract val rootDirectory: DirectoryProperty
-
     @get:Internal
     abstract val lockFile: RegularFileProperty
 
@@ -47,7 +35,7 @@ abstract class ValidateHostAbiTask : DefaultTask() {
     fun validate() {
         val lock = readLockFile(lockFile.get().asFile)
 
-        val currentSdkVersions = buildEffectiveSdkVersions()
+        val currentSdkVersions = sdkVersions.get()
         val changedSdks = findChangedEntries(lock.sdks, currentSdkVersions)
 
         val currentSharedDeps = sharedDepsVersions.get()
@@ -106,18 +94,6 @@ abstract class ValidateHostAbiTask : DefaultTask() {
         )
     }
 
-    private fun buildEffectiveSdkVersions(): Map<String, String> {
-        val declared = sdkVersions.get().toMutableMap()
-        val rootDir = rootDirectory.get().asFile
-        val sourceHash = hashFileCollection(sdkSourceFiles.files, rootDir)
-        for ((sdkId, value) in declared) {
-            if (value == NEEDS_SOURCE_HASH) {
-                declared[sdkId] = "sha256:$sourceHash"
-            }
-        }
-        return declared
-    }
-
     private fun findChangedEntries(
         previous: Map<String, String>,
         current: Map<String, String>,
@@ -132,9 +108,6 @@ abstract class ValidateHostAbiTask : DefaultTask() {
         return changed
     }
 
-    companion object {
-        const val NEEDS_SOURCE_HASH = "__needs_source_hash__"
-    }
 }
 
 data class AbiValidationResult(

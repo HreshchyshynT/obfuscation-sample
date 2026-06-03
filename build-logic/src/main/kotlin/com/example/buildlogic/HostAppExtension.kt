@@ -13,16 +13,6 @@ abstract class HostAppExtension @Inject constructor(
     private val project: Project,
 ){
     /**
-     * Projects whose source code forms the ABI boundary (e.g., ":plugin_sdk", ":plugin:api").
-     */
-    val sharedModules: ListProperty<String> = objects.listProperty(String::class.java)
-
-    /**
-     * Group and artifact prefixes to track for version changes (e.g., "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2").
-     */
-    val trackedDependencies: ListProperty<String> = objects.listProperty(String::class.java)
-
-    /**
      * Class/package prefixes for common dependencies whose mappings must appear
      * in every per-plugin mapping file (e.g. coroutines, kotlin functions).
      */
@@ -52,9 +42,16 @@ abstract class HostAppExtension @Inject constructor(
         }
     }
 
+    fun trackedDependency(vararg dependencyNotations: Any) {
+        dependencyNotations.forEach {
+            project.dependencies.add(TRACKED_DEPS_CONFIGURATION, it)
+        }
+    }
+
     companion object {
         const val PLUGINS_APIS_CONFIGURATION = "pluginsApiClasspath"
         const val PLUGIN_SDKS_CONFIGURATION = "pluginSdksClasspath"
+        const val TRACKED_DEPS_CONFIGURATION = "trackedDepsClasspath"
     }
 }
 
@@ -62,8 +59,6 @@ fun ExtensionContainer.getOrCreateHostAbiExtension(): HostAppExtension =
     findByType<HostAppExtension>()
             ?: create("hostAppConfig", HostAppExtension::class.java)
                 .apply {
-                    sharedModules.convention(listOf())
-                    trackedDependencies.convention(listOf())
                     commonDependencyPrefixes.convention(listOf(
                         "kotlin.coroutines.",
                         "kotlinx.coroutines.",
