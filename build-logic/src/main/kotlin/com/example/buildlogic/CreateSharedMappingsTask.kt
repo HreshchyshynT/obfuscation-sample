@@ -48,65 +48,76 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
         val allSharedNames = prefixes + classPluginIndex.keys
 
         val dir = outputDir.get().asFile.apply { mkdirs() }
-        val combinedFile = File(dir, COMBINED_MAPPINGS_FILE_NAME)
-        val combinedWriter = combinedFile.bufferedWriter()
+        val commonBuffers = allPluginIds.associateWith { StringBuilder() }
         val pluginBuffers = allPluginIds.associateWith { StringBuilder() }
 
         logger.lifecycle("Parsing host mapping: ${inputFile.absolutePath}")
 
         var insideTargetClass = false
         var currentPluginIds: Set<String> = emptySet()
+        var isCommonClass = false
         var extractedClassesCount = 0
-        var totalLinesWritten = 0
 
-        combinedWriter.use { writer ->
-            inputFile.useLines { lines ->
-                for (line in lines) {
-                    if (" -> " in line && line.endsWith(":")) {
-                        val originalClass = line.split(" -> ")[0].trim()
+        inputFile.useLines { lines ->
+            for (line in lines) {
+                if (" -> " in line && line.endsWith(":")) {
+                    val originalClass = line.split(" -> ")[0].trim()
 
-                        if (allSharedNames.any { originalClass.startsWith(it) }) {
-                            insideTargetClass = true
-                            extractedClassesCount++
+                    if (allSharedNames.any { originalClass.startsWith(it) }) {
+                        insideTargetClass = true
+                        extractedClassesCount++
 
-                            currentPluginIds = if (prefixes.any { originalClass.startsWith(it) }) {
-                                allPluginIds
-                            } else {
-                                classPluginIndex[originalClass]
-                                    ?: findOwnerPluginIds(classPluginIndex, originalClass)
-                            }
-
-                            writer.write(line)
-                            writer.newLine()
-                            totalLinesWritten++
-                            appendToPluginBuffers(pluginBuffers, currentPluginIds, line)
+                        isCommonClass = prefixes.any { originalClass.startsWith(it) }
+                        currentPluginIds = if (isCommonClass) {
+                            allPluginIds
                         } else {
-                            insideTargetClass = false
-                            currentPluginIds = emptySet()
+                            classPluginIndex[originalClass]
+                                ?: findOwnerPluginIds(classPluginIndex, originalClass)
                         }
-                    } else if (insideTargetClass) {
-                        writer.write(line)
-                        writer.newLine()
-                        totalLinesWritten++
-                        appendToPluginBuffers(pluginBuffers, currentPluginIds, line)
+
+                        appendToBuffers(
+                            if (isCommonClass) commonBuffers else pluginBuffers,
+                            currentPluginIds,
+                            line,
+                        )
+                    } else {
+                        insideTargetClass = false
+                        currentPluginIds = emptySet()
                     }
+                } else if (insideTargetClass) {
+                    appendToBuffers(
+                        if (isCommonClass) commonBuffers else pluginBuffers,
+                        currentPluginIds,
+                        line,
+                    )
                 }
             }
         }
 
-        pluginBuffers.forEach { (pluginId, buffer) ->
+        allPluginIds.forEach { pluginId ->
             val pluginFile = File(dir, "$pluginId.map")
-            pluginFile.writeText(buffer.toString())
-            logger.lifecycle("  Per-plugin mapping: ${pluginFile.name} (${buffer.lines().size} lines)")
+            pluginFile.bufferedWriter().use { writer ->
+                val common = commonBuffers[pluginId]
+                if (common != null && common.isNotEmpty()) {
+                    writer.write("$COMMON_START_MARKER\n")
+                    writer.write(common.toString())
+                    writer.write("$COMMON_END_MARKER\n")
+                }
+                val plugin = pluginBuffers[pluginId]
+                if (plugin != null && plugin.isNotEmpty()) {
+                    writer.write(plugin.toString())
+                }
+            }
+            logger.lifecycle("  Per-plugin mapping: ${pluginFile.name}")
         }
 
         logger.lifecycle(
-            "Extracted $extractedClassesCount classes ($totalLinesWritten lines) " +
-                    "into combined + ${pluginBuffers.size} per-plugin files."
+            "Extracted $extractedClassesCount classes " +
+                "into ${allPluginIds.size} per-plugin files."
         )
     }
 
-    private fun appendToPluginBuffers(
+    private fun appendToBuffers(
         buffers: Map<String, StringBuilder>,
         pluginIds: Set<String>,
         line: String,
@@ -139,6 +150,7 @@ abstract class CreateSharedMappingsTask : DefaultTask() {
     }
 
     companion object {
-        const val COMBINED_MAPPINGS_FILE_NAME = "common-mappings.map"
+        const val COMMON_START_MARKER = "# COMMON_START"
+        const val COMMON_END_MARKER = "# COMMON_END"
     }
 }

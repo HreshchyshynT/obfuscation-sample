@@ -147,6 +147,9 @@ data class AbiValidationResult(
         changedSdks.isNotEmpty() || changedSharedDeps.isNotEmpty() ||
             changedPlugins.isNotEmpty() || newPlugins.isNotEmpty()
 
+    fun hasCommonChange(): Boolean =
+        changedSdks.isNotEmpty() || changedSharedDeps.isNotEmpty()
+
     companion object {
         fun fromFile(file: File): AbiValidationResult {
             if (!file.exists()) {

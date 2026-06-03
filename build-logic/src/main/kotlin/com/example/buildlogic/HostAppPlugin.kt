@@ -60,8 +60,6 @@ class HostAppPlugin : Plugin<Project> {
                         sharedDir.mkdirs()
                     }
                     val abiLockFile = File(sharedDir, HOST_ABI_LOCK_FILE_NAME)
-                    val commonMappingsFile =
-                        File(sharedDir, CreateSharedMappingsTask.COMBINED_MAPPINGS_FILE_NAME)
 
                     val validateAbi = project.tasks.register(
                         "validatePluginAbi$variantCapName",
@@ -122,7 +120,7 @@ class HostAppPlugin : Plugin<Project> {
                         CreateTempProguardRulesTask::class.java,
                     ) {
                         validationResultFile.set(validateAbi.flatMap { it.resultFile })
-                        sharedMappingsFile.set(commonMappingsFile)
+                        mappingsDir.set(sharedDir)
                         val proguardFile =
                             layout.buildDirectory.file(getTempProguardPath(variantCapName))
                         generatedProGuardFile.set(proguardFile)
