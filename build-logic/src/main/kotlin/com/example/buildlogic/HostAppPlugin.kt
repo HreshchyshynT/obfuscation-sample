@@ -25,6 +25,7 @@ class HostAppPlugin : Plugin<Project> {
             configurations.create(HostAppExtension.PLUGINS_APIS_CONFIGURATION) {
                 isCanBeConsumed = false
                 isCanBeResolved = true
+                isTransitive = false
                 attributes {
                     attribute(
                         BuildTypeAttr.ATTRIBUTE,
@@ -145,7 +146,7 @@ class HostAppPlugin : Plugin<Project> {
 
     private fun Project.buildArtifactVersions(
         config: Configuration,
-    ) = provider {
+    ) =
         config.incoming.artifactView {
             attributes {
                 attribute(
@@ -153,16 +154,17 @@ class HostAppPlugin : Plugin<Project> {
                     ArtifactTypeDefinition.JAR_TYPE,
                 )
             }
-        }.artifacts.resolvedArtifacts.get().associate { artifact ->
-            val id = artifact.id.componentIdentifier
-            val pluginId = derivePluginId(id)
-            val version = when (id) {
-                is ModuleComponentIdentifier -> id.version
-                else -> "sha256:${hashFileContent(artifact.file)}"
+        }.artifacts.resolvedArtifacts.map { artifacts ->
+            artifacts.associate { artifact ->
+                val id = artifact.id.componentIdentifier
+                val pluginId = derivePluginId(id)
+                val version = when (id) {
+                    is ModuleComponentIdentifier -> id.version
+                    else -> "sha256:${hashFileContent(artifact.file)}"
+                }
+                pluginId to version
             }
-            pluginId to version
         }
-    }
 
     private fun Project.buildSdkVersions(
         extension: HostAppExtension,

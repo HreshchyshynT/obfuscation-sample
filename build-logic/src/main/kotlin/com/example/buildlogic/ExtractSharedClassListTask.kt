@@ -47,10 +47,6 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
 
     @TaskAction
     fun extract() {
-        buildClassPluginIndex()
-    }
-
-    private fun buildClassPluginIndex() {
         val mapping = pluginFileMapping.get()
         val invertedIndex = TreeMap<String, TreeSet<String>>()
 
@@ -59,9 +55,9 @@ abstract class ExtractSharedClassListTask : DefaultTask() {
             println("file: ${file.name} pluginId: $pluginId")
             if (pluginId == null) return@forEach
             val pluginEntries = TreeSet<String>()
-            when {
-                file.name.endsWith(".aar") -> processAar(file, pluginEntries)
-                file.name.endsWith(".jar") -> processJar(file, pluginEntries)
+            when(file.extension) {
+                "aar" -> processAar(file, pluginEntries)
+                "jar" -> processJar(file, pluginEntries)
             }
             pluginEntries.forEach { entry ->
                 invertedIndex.getOrPut(entry) { TreeSet() }.add(pluginId)
